@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.bp.Duration;
@@ -66,12 +67,19 @@ public abstract class StorageWriteApiBase {
   private static final int MAX_RETRY_DELAY_MINUTES = 1;
   public static final String TRACE_ID_FORMAT = "AivenKafkaConnector:%s";
   protected final JsonStreamWriterFactory jsonWriterFactory;
+  // TODO: This should be private
+  protected static final String CHANGE_TYPE_PSEUDO_COLUMN = "_CHANGE_TYPE";
   protected final int retry;
   protected final long retryWait;
   private final boolean autoCreateTables;
   private final boolean ignoreUnknownFields;
   private final BigQueryWriteSettings writeSettings;
   private final boolean attemptSchemaUpdate;
+
+  // TODO: These should be private
+  protected final boolean upsertEnabled;
+  protected final boolean deleteEnabled;
+
   protected SchemaManager schemaManager;
   @VisibleForTesting
   protected Time time;
@@ -84,7 +92,9 @@ public abstract class StorageWriteApiBase {
    * @param writeSettings       Write Settings for stream which carry authentication and other header information
    * @param autoCreateTables    boolean flag set if table should be created automatically
    * @param errantRecordHandler Used to handle errant records
-   * @param config              Connector configurations
+   * @param schemaManager       Schema manager used for handling BigQuery schema updates
+   * @param attemptSchemaUpdate Whether to attempt to update schema when records do not match
+   * @param config             Connector configurations
    */
   protected StorageWriteApiBase(int retry,
                                 long retryWait,
@@ -101,7 +111,9 @@ public abstract class StorageWriteApiBase {
     this.errantRecordHandler = errantRecordHandler;
     this.schemaManager = schemaManager;
     this.attemptSchemaUpdate = attemptSchemaUpdate;
-    this.ignoreUnknownFields = config.isIgnoreUnknownFields();
+    this.ignoreUnknownFields = config != null && config.isIgnoreUnknownFields();
+    this.upsertEnabled = config != null && config.isUpsertEnabled();
+    this.deleteEnabled = config != null && config.isDeleteEnabled();
     try {
       this.writeClient = getWriteClient();
     } catch (IOException e) {
@@ -119,7 +131,7 @@ public abstract class StorageWriteApiBase {
    * @param autoCreateTables    boolean flag set if table should be created automatically
    * @param errantRecordHandler Used to handle errant records
    *
-   * @deprecated This constructor does not support does not support configuration of additional write settings.
+   * @deprecated This constructor does not support configuration of additional write settings.
    * Use {@link #StorageWriteApiBase(int retry, long retryWait, BigQueryWriteSettings writeSettings,
    * boolean autoCreateTables, ErrantRecordHandler errantRecordHandler, SchemaManager schemaManager,
    * boolean attemptSchemaUpdate, BigQuerySinkConfig config)} instead.
@@ -140,6 +152,8 @@ public abstract class StorageWriteApiBase {
     this.schemaManager = schemaManager;
     this.attemptSchemaUpdate = attemptSchemaUpdate;
     this.ignoreUnknownFields = false;
+    this.upsertEnabled = false;
+    this.deleteEnabled = false;
     try {
       this.writeClient = getWriteClient();
     } catch (IOException e) {
@@ -493,6 +507,12 @@ public abstract class StorageWriteApiBase {
   private JSONArray getJsonRecords(List<ConvertedRecord> rows) {
     JSONArray jsonRecords = new JSONArray();
     for (ConvertedRecord item : rows) {
+      JSONObject converted = item.converted();
+      if (item.original().value() != null && upsertEnabled) {
+        converted.put(CHANGE_TYPE_PSEUDO_COLUMN, "UPSERT");
+      } else if (item.original().value() == null && deleteEnabled) {
+        converted.put(CHANGE_TYPE_PSEUDO_COLUMN, "DELETE");
+      }
       jsonRecords.put(item.converted());
     }
     return jsonRecords;

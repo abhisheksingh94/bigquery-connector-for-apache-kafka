@@ -83,24 +83,24 @@ public class StorageWriteApiBatchApplicationStream extends StorageWriteApiBase {
   protected ConcurrentMap<ApplicationStream, Object> streamLocks;
 
   public StorageWriteApiBatchApplicationStream(
-      int retry,
-      long retryWait,
-      BigQueryWriteSettings writeSettings,
-      boolean autoCreateTables,
-      ErrantRecordHandler errantRecordHandler,
-      SchemaManager schemaManager,
-      boolean attemptSchemaUpdate,
-      BigQuerySinkConfig config) {
-    super(
-        retry,
-        retryWait,
-        writeSettings,
-        autoCreateTables,
-        errantRecordHandler,
-        schemaManager,
-        attemptSchemaUpdate,
-        config
-    );
+    int retry,
+    long retryWait,
+    BigQueryWriteSettings writeSettings,
+    boolean autoCreateTables,
+    ErrantRecordHandler errantRecordHandler,
+    SchemaManager schemaManager,
+    boolean attemptSchemaUpdate,
+    BigQuerySinkConfig config) {
+  super(
+    retry,
+    retryWait,
+    writeSettings,
+    autoCreateTables,
+    errantRecordHandler,
+    schemaManager,
+    attemptSchemaUpdate,
+    config
+  );
     streams = new ConcurrentHashMap<>();
     currentStreams = new ConcurrentHashMap<>();
     tableLocks = new ConcurrentHashMap<>();
@@ -272,7 +272,7 @@ public class StorageWriteApiBatchApplicationStream extends StorageWriteApiBase {
         TableNameUtils.tableId(TableName.parse(tableName)), rows != null ? getSinkRecords(rows) : null, retry, retryWait, time);
     do {
       try {
-        return new ApplicationStream(tableName, getWriteClient(), jsonWriterFactory);
+  return new ApplicationStream(tableName, getWriteClient(), jsonWriterFactory, this.upsertEnabled);
       } catch (Exception e) {
         String baseErrorMessage = String.format(
             "Failed to create Application stream writer on table %s due to %s",

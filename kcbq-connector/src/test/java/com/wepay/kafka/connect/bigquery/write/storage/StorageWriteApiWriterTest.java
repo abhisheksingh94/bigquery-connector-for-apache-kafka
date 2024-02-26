@@ -79,8 +79,8 @@ public class StorageWriteApiWriterTest {
     PartitionedTableId table = new PartitionedTableId.Builder(
             TableId.of("test-project", "scratch", "dummy_table")
     ).build();
-    TableWriterBuilder builder = new StorageWriteApiWriter.Builder(
-        mockStreamWriter, table, sinkRecordConverter, batchModeHandler);
+  TableWriterBuilder builder = new StorageWriteApiWriter.Builder(
+    mockStreamWriter, table, sinkRecordConverter, mockedConfig, batchModeHandler);
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<ConvertedRecord>> records = ArgumentCaptor.forClass(List.class);
     String expectedKafkaKey = "{\"key\":\"12345\"}";
@@ -142,11 +142,11 @@ public class StorageWriteApiWriterTest {
     StorageApiBatchModeHandler batchModeHandler = mock(StorageApiBatchModeHandler.class);
     ArgumentCaptor<String> tableNameCaptor = ArgumentCaptor.forClass(String.class);
     when(batchModeHandler.updateOffsetsOnStream(tableNameCaptor.capture(), any()))
-            .thenReturn(expectedStreamName);
+      .thenReturn(expectedStreamName);
 
     SinkRecordConverter sinkRecordConverter = new SinkRecordConverter(mockedConfig, null, null);
     TableWriterBuilder builder = new StorageWriteApiWriter.Builder(
-            mockStreamWriter, partitionedTableId, sinkRecordConverter, batchModeHandler);
+      mockStreamWriter, partitionedTableId, sinkRecordConverter, mockedConfig, batchModeHandler);
 
     builder.addRow(createRecord("abc", 100), null);
     builder.build().run();

@@ -76,7 +76,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testStreamCreation() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     assertEquals(applicationStream.getCurrentState(), StreamState.CREATED);
     assertNotNull(applicationStream.writer());
     applicationStream.closeStream();
@@ -84,7 +84,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testStreamClose() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     String streamName = applicationStream.writer().getStreamName();
     applicationStream.closeStream();
     assertNotEquals(applicationStream.writer().getStreamName(), streamName);
@@ -92,14 +92,14 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testApplicationStreamName() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     assertTrue(applicationStream.getStreamName().contains("streams"));
     applicationStream.closeStream();
   }
 
   @Test
   public void testMaxCallCount() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     assertEquals(applicationStream.getCurrentState(), StreamState.CREATED);
     int maxCount = applicationStream.increaseMaxCalls();
     assertEquals(applicationStream.getCurrentState(), StreamState.APPEND);
@@ -109,7 +109,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testCanBeMovedToNonActive() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     assertFalse(applicationStream.canTransitionToNonActive());
     applicationStream.increaseMaxCalls();
     assertTrue(applicationStream.canTransitionToNonActive());
@@ -118,7 +118,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testResetWriter() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     JsonStreamWriter writer = applicationStream.writer();
     applicationStream.closeStream();
     JsonStreamWriter updatedWriter = applicationStream.writer();
@@ -128,7 +128,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testStreamFinalised() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     applicationStream.increaseMaxCalls();
     applicationStream.closeStream();
     applicationStream.writer();
@@ -140,7 +140,7 @@ public class ApplicationStreamIT extends BaseConnectorIT {
 
   @Test
   public void testStreamCommitted() throws Exception {
-    ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory);
+  ApplicationStream applicationStream = new ApplicationStream(tableNameStr, client, jsonWriterFactory, false);
     applicationStream.increaseMaxCalls();
     applicationStream.closeStream();
     applicationStream.writer();

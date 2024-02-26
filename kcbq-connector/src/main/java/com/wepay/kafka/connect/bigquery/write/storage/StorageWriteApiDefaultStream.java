@@ -25,6 +25,7 @@ package com.wepay.kafka.connect.bigquery.write.storage;
 
 import com.google.api.core.ApiFuture;
 import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
+import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteSettings;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.google.cloud.bigquery.storage.v1.TableName;
@@ -135,7 +136,15 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
       StorageWriteApiRetryHandler retryHandler = new StorageWriteApiRetryHandler(table.getBaseTableId(), getSinkRecords(rows), retry, retryWait, time);
       do {
         try {
-          return jsonWriterFactory.create(tableName);
+          // Prefer factory if available — it already configures retry settings and ignoreUnknownFields
+          if (jsonWriterFactory != null) {
+            JsonStreamWriter writer = jsonWriterFactory.create(t);
+            // The factory should create writers with the configured settings (ignoreUnknownFields, retry etc.).
+            // If upsert support requires a schema change it will be handled when building the writer via writeClient below.
+            return writer;
+          }
+          BigQueryWriteClient writeClient = getWriteClient();
+          return JsonStreamWriter.newBuilder(t, writeClient).build();
         } catch (Exception e) {
           String baseErrorMessage = String.format(
               "Failed to create Default stream writer on table %s due to %s",
