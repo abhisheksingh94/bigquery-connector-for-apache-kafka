@@ -80,7 +80,7 @@ public class StorageWriteApiWriterTest {
             TableId.of("test-project", "scratch", "dummy_table")
     ).build();
     TableWriterBuilder builder = new StorageWriteApiWriter.Builder(
-        mockStreamWriter, table, sinkRecordConverter, batchModeHandler);
+        mockStreamWriter, table, sinkRecordConverter, mockedConfig, batchModeHandler);
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<ConvertedRecord>> records = ArgumentCaptor.forClass(List.class);
     String expectedKafkaKey = "{\"key\":\"12345\"}";

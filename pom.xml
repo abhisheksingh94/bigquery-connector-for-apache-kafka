@@ -62,7 +62,8 @@
         <exec.plugin.version>3.2.0</exec.plugin.version>
         <google.cloud.bom.version>26.33.0</google.cloud.bom.version>
         <surefire.plugin.version>3.5.3</surefire.plugin.version>
-
+        <kafka.connect.plugin.version>0.11.1</kafka.connect.plugin.version>
+        <release.plugin.version>2.5.3</release.plugin.version>
         <site.plugin.version>3.21.0</site.plugin.version>
         <velocity.core.version>2.4.1</velocity.core.version>
         <velocity.tools.version>3.1</velocity.tools.version>

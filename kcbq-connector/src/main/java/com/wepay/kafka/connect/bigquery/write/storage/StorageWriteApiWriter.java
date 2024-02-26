@@ -30,6 +30,8 @@ import com.wepay.kafka.connect.bigquery.utils.SinkRecordConverter;
 import com.wepay.kafka.connect.bigquery.utils.TableNameUtils;
 import com.wepay.kafka.connect.bigquery.write.batch.TableWriterBuilder;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -92,6 +94,7 @@ public class StorageWriteApiWriter implements Runnable {
     private final List<ConvertedRecord> records = new ArrayList<>();
     private final SinkRecordConverter recordConverter;
     private final PartitionedTableId table;
+    private final BigQuerySinkConfig config;
     private final StorageWriteApiBase streamWriter;
     private final StorageApiBatchModeHandler batchModeHandler;
 
@@ -102,16 +105,19 @@ public class StorageWriteApiWriter implements Runnable {
     public Builder(StorageWriteApiBase streamWriter,
                    TableName tableName,
                    SinkRecordConverter recordConverter,
+                   BigQuerySinkConfig config,
                    StorageApiBatchModeHandler batchModeHandler) {
-      this(streamWriter, TableNameUtils.partitionedTableId(tableName), recordConverter, batchModeHandler);
+      this(streamWriter, TableNameUtils.partitionedTableId(tableName), recordConverter, config, batchModeHandler);
     }
 
     public Builder(StorageWriteApiBase streamWriter,
                    PartitionedTableId table,
                    SinkRecordConverter recordConverter,
+                   BigQuerySinkConfig config,
                    StorageApiBatchModeHandler batchModeHandler) {
       this.streamWriter = streamWriter;
       this.table = table;
+      this.config = config;
       this.recordConverter = recordConverter;
       this.batchModeHandler = batchModeHandler;
     }
@@ -147,7 +153,23 @@ public class StorageWriteApiWriter implements Runnable {
         TableName tableName = TableNameUtils.tableName(table.getBaseTableId());
         streamName = batchModeHandler.updateOffsetsOnStream(tableName.toString(), records);
       }
-      return new StorageWriteApiWriter(table, streamWriter, records, streamName);
+      final List<ConvertedRecord> recordsToWrite;
+      // If upsert is enabled, we pre-compact our records to avoid
+      // 1) sending unnecessary rows to BigQuery and
+      // 2) running into some sharp edges where upsert logic is not applied intuitively
+      //    for row batches that contain multiple rows with the same primary key
+      // Also note that we don't support delete-only mode with the Storage Write API, so no
+      // special logic for that case is necessary
+      if (config.isUpsertEnabled()) {
+        Map<Object, ConvertedRecord> compactedRecords = new LinkedHashMap<>(16, 0.75f, true);
+        for (ConvertedRecord convertedRecord : records) {
+          compactedRecords.put(convertedRecord.original().key(), convertedRecord);
+        }
+        recordsToWrite = new ArrayList<>(compactedRecords.values());
+      } else {
+        recordsToWrite = this.records;
+      }
+      return new StorageWriteApiWriter(table, streamWriter, recordsToWrite, streamName);
     }
 
     private JSONObject getJsonFromMap(Map<String, Object> map) {

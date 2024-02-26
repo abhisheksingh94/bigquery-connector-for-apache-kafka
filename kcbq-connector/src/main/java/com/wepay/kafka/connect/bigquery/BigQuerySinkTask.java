@@ -227,6 +227,7 @@ public class BigQuerySinkTask extends SinkTask {
                 storageApiWriter,
                 table,
                 recordConverter,
+                config,
                 batchHandler
             );
           } else if (config.getList(BigQuerySinkConfig.ENABLE_BATCH_CONFIG).contains(record.topic())) {
@@ -352,7 +353,8 @@ public class BigQuerySinkTask extends SinkTask {
         allowNewBigQueryFields, allowRequiredFieldRelaxation, allowSchemaUnionization,
         sanitizeFieldNames,
         kafkaKeyFieldName, kafkaDataFieldName,
-        timestampPartitionFieldName, partitionExpiration, clusteringFieldName, timePartitioningType);
+        timestampPartitionFieldName, partitionExpiration, clusteringFieldName, timePartitioningType,
+        useStorageApi);
   }
 
   private BigQueryWriter getBigQueryWriter(ErrantRecordHandler errantRecordHandler) {
@@ -424,7 +426,6 @@ public class BigQuerySinkTask extends SinkTask {
     stopped = false;
     config = new BigQuerySinkTaskConfig(properties);
     autoCreateTables = config.getBoolean(BigQuerySinkConfig.TABLE_CREATE_CONFIG);
-
     useStorageApi = config.getBoolean(BigQuerySinkConfig.USE_STORAGE_WRITE_API_CONFIG);
     useStorageApiBatchMode = useStorageApi && config.getBoolean(BigQuerySinkConfig.ENABLE_BATCH_MODE_CONFIG);
     upsertDelete = !useStorageApi && (config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG)

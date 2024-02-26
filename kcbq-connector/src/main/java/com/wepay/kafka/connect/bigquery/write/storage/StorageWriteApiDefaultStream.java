@@ -25,9 +25,15 @@ package com.wepay.kafka.connect.bigquery.write.storage;
 
 import com.google.api.core.ApiFuture;
 import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
+import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteSettings;
+import com.google.cloud.bigquery.storage.v1.GetWriteStreamRequest;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
+import com.google.cloud.bigquery.storage.v1.TableFieldSchema;
 import com.google.cloud.bigquery.storage.v1.TableName;
+import com.google.cloud.bigquery.storage.v1.TableSchema;
+import com.google.cloud.bigquery.storage.v1.WriteStream;
+import com.google.cloud.bigquery.storage.v1.WriteStreamView;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Descriptors;
 import com.wepay.kafka.connect.bigquery.ErrantRecordHandler;
@@ -135,7 +141,32 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
       StorageWriteApiRetryHandler retryHandler = new StorageWriteApiRetryHandler(table.getBaseTableId(), getSinkRecords(rows), retry, retryWait, time);
       do {
         try {
-          return jsonWriterFactory.create(tableName);
+          if (upsertEnabled) {
+            BigQueryWriteClient writeClient = getWriteClient();
+
+            // Copied from JsonStreamWriter::newBuilder
+            // TODO: Extract logic into superclass and leverage in StorageWriteApiBatchApplicationStream
+            //       class as well
+            GetWriteStreamRequest writeStreamRequest = GetWriteStreamRequest.newBuilder()
+                .setName(t + "/_default")
+                .setView(WriteStreamView.FULL)
+                .build();
+            WriteStream writeStream = writeClient.getWriteStream(writeStreamRequest);
+            TableSchema.Builder writeSchema = writeStream.hasTableSchema()
+                ? writeStream.getTableSchema().toBuilder()
+                : TableSchema.newBuilder();
+            writeSchema.addFields(
+                    TableFieldSchema.newBuilder()
+                        .setName(CHANGE_TYPE_PSEUDO_COLUMN)
+                        .setType(TableFieldSchema.Type.STRING)
+                        .setMode(TableFieldSchema.Mode.REQUIRED)
+                        .build()
+            );
+
+            return JsonStreamWriter.newBuilder(t, writeSchema.build(), writeClient).build();
+          } else {
+            return jsonWriterFactory.create(tableName);
+          }
         } catch (Exception e) {
           String baseErrorMessage = String.format(
               "Failed to create Default stream writer on table %s due to %s",
