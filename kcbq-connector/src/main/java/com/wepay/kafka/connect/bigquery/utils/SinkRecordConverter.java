@@ -27,6 +27,7 @@ import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.TableId;
 import com.wepay.kafka.connect.bigquery.MergeQueries;
 import com.wepay.kafka.connect.bigquery.api.KafkaSchemaRecordType;
+import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkTaskConfig;
 import com.wepay.kafka.connect.bigquery.convert.KafkaDataBuilder;
 import com.wepay.kafka.connect.bigquery.convert.RecordConverter;
@@ -122,12 +123,12 @@ public class SinkRecordConverter {
   }
 
   public Map<String, Object> getRegularRow(SinkRecord record) {
-    Map<String, Object> result = config.getBoolean(config.DELETE_ENABLED_CONFIG) && record.value() == null
+    Map<String, Object> result = config.getBoolean(BigQuerySinkConfig.DELETE_ENABLED_CONFIG) && record.value() == null
         ? new HashMap<>()
         : recordConverter.convertRecord(record, KafkaSchemaRecordType.VALUE);
 
     config.getKafkaDataFieldName().ifPresent(fieldName -> {
-      Map<String, Object> kafkaDataField = config.getBoolean(config.USE_STORAGE_WRITE_API_CONFIG)
+      Map<String, Object> kafkaDataField = config.getBoolean(BigQuerySinkConfig.USE_STORAGE_WRITE_API_CONFIG)
           ? KafkaDataBuilder.buildKafkaDataRecordStorageApi(record)
           : KafkaDataBuilder.buildKafkaDataRecord(record);
       result.put(fieldName, kafkaDataField);
@@ -146,7 +147,7 @@ public class SinkRecordConverter {
   }
 
   private Map<String, Object> maybeSanitize(Map<String, Object> convertedRecord) {
-    return config.getBoolean(config.SANITIZE_FIELD_NAME_CONFIG)
+    return config.getBoolean(BigQuerySinkConfig.SANITIZE_FIELD_NAME_CONFIG)
         ? FieldNameSanitizer.replaceInvalidKeys(convertedRecord)
         : convertedRecord;
   }

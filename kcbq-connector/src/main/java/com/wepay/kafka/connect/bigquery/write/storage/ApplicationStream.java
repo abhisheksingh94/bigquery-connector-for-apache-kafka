@@ -74,7 +74,7 @@ public class ApplicationStream {
   private final AtomicLong totalRowsSent;
   private final boolean upsertEnabled;
   private final List<String> committableStreams;
-  private StreamState currentState;
+  private StreamState currentState = null;
   private WriteStream stream = null;
   private JsonStreamWriter jsonWriter = null;
 
