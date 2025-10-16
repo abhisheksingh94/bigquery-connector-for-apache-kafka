@@ -146,7 +146,7 @@ public class StorageWriteApiWriterTest {
 
     SinkRecordConverter sinkRecordConverter = new SinkRecordConverter(mockedConfig, null, null);
     TableWriterBuilder builder = new StorageWriteApiWriter.Builder(
-            mockStreamWriter, partitionedTableId, sinkRecordConverter, batchModeHandler);
+            mockStreamWriter, partitionedTableId, sinkRecordConverter, mockedConfig, batchModeHandler);
 
     builder.addRow(createRecord("abc", 100), null);
     builder.build().run();

@@ -298,7 +298,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
 
       Map<String, String> topic2TableMap = new HashMap<>();
 
-      for (String str : topic2TableMapString.split(',')) {
+      for (String str : topic2TableMapString.split(",")) {
         String[] tt = str.split(":");
 
         if (tt.length != 2) {
@@ -926,6 +926,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
                               public List<Object> validValues(String s, Map<String, Object> map) {
                                 return new ArrayList<>(TIME_PARTITIONING_TYPES);
                               }
+
                               @Override
                               public boolean visible(String s, Map<String, Object> map) {
                                 return true;
@@ -1261,7 +1262,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
     }
     Map<String, String> topic2TableMap = new HashMap<>();
     // It's already validated, so we can just populate the map
-    for (String str : topic2TableMapString.split(',')) {
+    for (String str : topic2TableMapString.split(",")) {
       String[] tt = str.split(":");
       String topic = tt[0].trim();
       String table = tt[1].trim();

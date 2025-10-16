@@ -33,15 +33,12 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Batch Table Writer that uploads records to GCS as a blob
  * and then triggers a load job from that GCS file to BigQuery.
  */
 public class GcsBatchTableWriter implements Runnable {
-  private static final Logger logger = LoggerFactory.getLogger(GcsBatchTableWriter.class);
 
   private final TableId tableId;
 

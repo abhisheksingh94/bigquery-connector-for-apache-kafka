@@ -62,11 +62,11 @@ public class SinkRecordConverter {
     this.mergeQueries = mergeQueries;
 
     this.recordConverter = config.getRecordConverter();
-    this.mergeRecordsThreshold = config.getLong(config.MERGE_RECORDS_THRESHOLD_CONFIG);
+    this.mergeRecordsThreshold = config.getLong(BigQuerySinkTaskConfig.MERGE_RECORDS_THRESHOLD_CONFIG);
     this.useMessageTimeDatePartitioning =
-        config.getBoolean(config.BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG);
+      config.getBoolean(BigQuerySinkTaskConfig.BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG);
     this.usePartitionDecorator =
-        config.getBoolean(config.BIGQUERY_PARTITION_DECORATOR_CONFIG);
+        config.getBoolean(BigQuerySinkTaskConfig.BIGQUERY_PARTITION_DECORATOR_CONFIG);
   }
 
   public InsertAllRequest.RowToInsert getRecordRow(SinkRecord record, TableId table) {
@@ -79,7 +79,7 @@ public class SinkRecordConverter {
 
   private Map<String, Object> getUpsertDeleteRow(SinkRecord record, TableId table) {
     // Unconditionally allow tombstone records if delete is enabled.
-    Map<String, Object> convertedValue = config.getBoolean(config.DELETE_ENABLED_CONFIG) && record.value() == null
+    Map<String, Object> convertedValue = config.getBoolean(BigQuerySinkTaskConfig.DELETE_ENABLED_CONFIG) && record.value() == null
         ? null
         : recordConverter.convertRecord(record, KafkaSchemaRecordType.VALUE);
 
@@ -122,12 +122,12 @@ public class SinkRecordConverter {
   }
 
   public Map<String, Object> getRegularRow(SinkRecord record) {
-    Map<String, Object> result = config.getBoolean(config.DELETE_ENABLED_CONFIG) && record.value() == null
+    Map<String, Object> result = config.getBoolean(BigQuerySinkTaskConfig.DELETE_ENABLED_CONFIG) && record.value() == null
         ? new HashMap<>()
         : recordConverter.convertRecord(record, KafkaSchemaRecordType.VALUE);
 
     config.getKafkaDataFieldName().ifPresent(fieldName -> {
-      Map<String, Object> kafkaDataField = config.getBoolean(config.USE_STORAGE_WRITE_API_CONFIG)
+      Map<String, Object> kafkaDataField = config.getBoolean(BigQuerySinkTaskConfig.USE_STORAGE_WRITE_API_CONFIG)
           ? KafkaDataBuilder.buildKafkaDataRecordStorageApi(record)
           : KafkaDataBuilder.buildKafkaDataRecord(record);
       result.put(fieldName, kafkaDataField);
@@ -146,7 +146,7 @@ public class SinkRecordConverter {
   }
 
   private Map<String, Object> maybeSanitize(Map<String, Object> convertedRecord) {
-    return config.getBoolean(config.SANITIZE_FIELD_NAME_CONFIG)
+    return config.getBoolean(BigQuerySinkTaskConfig.SANITIZE_FIELD_NAME_CONFIG)
         ? FieldNameSanitizer.replaceInvalidKeys(convertedRecord)
         : convertedRecord;
   }

@@ -31,7 +31,6 @@ import com.wepay.kafka.connect.bigquery.utils.SinkRecordConverter;
 import com.wepay.kafka.connect.bigquery.utils.TableNameUtils;
 import com.wepay.kafka.connect.bigquery.write.batch.TableWriterBuilder;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,12 +176,16 @@ public class StorageWriteApiWriter implements Runnable {
       JSONObject jsonObject = new JSONObject();
       map.forEach((key, value) -> {
         if (value instanceof Map<?, ?>) {
-          value = getJsonFromMap((Map<String, Object>) value);
+          @SuppressWarnings("unchecked")
+          Map<String, Object> mapValue = (Map<String, Object>) value;
+          value = getJsonFromMap(mapValue);
         } else if (value instanceof List<?>) {
           JSONArray items = new JSONArray();
           ((List<?>) value).forEach(v -> {
             if (v instanceof Map<?, ?>) {
-              items.put(getJsonFromMap((Map<String, Object>) v));
+              @SuppressWarnings("unchecked")
+              Map<String, Object> mapV = (Map<String, Object>) v;
+              items.put(getJsonFromMap(mapV));
             } else {
               items.put(v);
             }
