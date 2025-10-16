@@ -147,7 +147,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
   public static final String INTERMEDIATE_TABLE_SUFFIX_DEFAULT = "tmp";
   public static final String MERGE_INTERVAL_MS_CONFIG = "mergeIntervalMs";
   public static final String MERGE_RECORDS_THRESHOLD_CONFIG = "mergeRecordsThreshold";
-  public static final long MERGE_INTERVAL_MS_DEFAULT = 60_000L;
+  public static final long MERGE_INTERVAL_MS_DEFAULT = 60000L;
   public static final long MERGE_RECORDS_THRESHOLD_DEFAULT = -1;
   public static final String THREAD_POOL_SIZE_CONFIG = "threadPoolSize";
   public static final Integer THREAD_POOL_SIZE_DEFAULT = 10;
@@ -298,7 +298,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
 
       Map<String, String> topic2TableMap = new HashMap<>();
 
-      for (String str : topic2TableMapString.split(",")) {
+      for (String str : topic2TableMapString.split(',')) {
         String[] tt = str.split(":");
 
         if (tt.length != 2) {
@@ -657,7 +657,6 @@ public class BigQuerySinkConfig extends AbstractConfig {
    */
   public static ConfigDef getConfig() {
     return new ConfigDef()
-<<<<<<< HEAD
             .define(
                     TOPICS_CONFIG,
                     TOPICS_TYPE,
@@ -755,7 +754,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
                     KAFKA_KEY_FIELD_NAME_CONFIG,
                     KAFKA_KEY_FIELD_NAME_TYPE,
                     KAFKA_KEY_FIELD_NAME_DEFAULT,
-                    KAFKA_KEY_FIELD_NAME_VALIDATOR,
+                    null,
                     KAFKA_KEY_FIELD_NAME_IMPORTANCE,
                     KAFKA_KEY_FIELD_NAME_DOC
             ).define(
@@ -912,305 +911,26 @@ public class BigQuerySinkConfig extends AbstractConfig {
                             .type(TIME_PARTITIONING_TYPE_TYPE)
                             .defaultValue(TIME_PARTITIONING_TYPE_DEFAULT)
                             .validator(
-                              new ConfigDef.Validator() {
-                                @Override
-                                public void ensureValid(String name, Object value) {
-                                  if (value == null) {
-                                    return;
-                                  }
-                                  String[] validStrings = TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).toArray(String[]::new);
-                                  String lowercaseValue = ((String) value).toLowerCase();
-                                  ConfigDef.ValidString.in(validStrings).ensureValid(name, lowercaseValue);
-                                }
-=======
-        .define(
-            TOPICS_CONFIG,
-            TOPICS_TYPE,
-            TOPICS_DEFAULT,
-            TOPICS_IMPORTANCE,
-            TOPICS_DOC,
-            TOPICS_GROUP,
-            TOPICS_ORDER_IN_GROUP,
-            TOPICS_WIDTH,
-            TOPICS_DISPLAY)
-        .define(
-            TOPICS_REGEX_CONFIG,
-            TOPICS_REGEX_TYPE,
-            TOPICS_REGEX_DEFAULT,
-            TOPICS_REGEX_IMPORTANCE,
-            TOPICS_REGEX_DOC,
-            TOPICS_REGEX_GROUP,
-            TOPICS_REGEX_ORDER_IN_GROUP,
-            TOPICS_REGEX_WIDTH,
-            TOPICS_REGEX_DISPLAY)
-        .define(
-            ENABLE_BATCH_CONFIG,
-            ENABLE_BATCH_TYPE,
-            ENABLE_BATCH_DEFAULT,
-            ENABLE_BATCH_IMPORTANCE,
-            ENABLE_BATCH_DOC
-        ).define(
-            BATCH_LOAD_INTERVAL_SEC_CONFIG,
-            BATCH_LOAD_INTERVAL_SEC_TYPE,
-            BATCH_LOAD_INTERVAL_SEC_DEFAULT,
-            BATCH_LOAD_INTERVAL_SEC_IMPORTANCE,
-            BATCH_LOAD_INTERVAL_SEC_DOC
-        ).define(
-            GCS_BUCKET_NAME_CONFIG,
-            GCS_BUCKET_NAME_TYPE,
-            GCS_BUCKET_NAME_DEFAULT,
-            GCS_BUCKET_NAME_IMPORTANCE,
-            GCS_BUCKET_NAME_DOC
-        ).define(
-            GCS_FOLDER_NAME_CONFIG,
-            GCS_FOLDER_NAME_TYPE,
-            GCS_FOLDER_NAME_DEFAULT,
-            GCS_FOLDER_NAME_IMPORTANCE,
-            GCS_FOLDER_NAME_DOC
-        ).define(
-            PROJECT_CONFIG,
-            PROJECT_TYPE,
-            PROJECT_IMPORTANCE,
-            PROJECT_DOC
-        ).define(
-            DEFAULT_DATASET_CONFIG,
-            DEFAULT_DATASET_TYPE,
-            DEFAULT_DATASET_DEFAULT,
-            DEFAULT_DATASET_IMPORTANCE,
-            DEFAULT_DATASET_DOC
-        ).define(
-            SCHEMA_RETRIEVER_CONFIG,
-            SCHEMA_RETRIEVER_TYPE,
-            SCHEMA_RETRIEVER_DEFAULT,
-            SCHEMA_RETRIEVER_IMPORTANCE,
-            SCHEMA_RETRIEVER_DOC
-        ).define(
-            KEYFILE_CONFIG,
-            KEYFILE_TYPE,
-            KEYFILE_DEFAULT,
-            KEYFILE_IMPORTANCE,
-            KEYFILE_DOC
-        ).define(
-            KEY_SOURCE_CONFIG,
-            KEY_SOURCE_TYPE,
-            KEY_SOURCE_DEFAULT,
-            KEY_SOURCE_VALIDATOR,
-            KEY_SOURCE_IMPORTANCE,
-            KEY_SOURCE_DOC
-        ).define(
-            SANITIZE_TOPICS_CONFIG,
-            SANITIZE_TOPICS_TYPE,
-            SANITIZE_TOPICS_DEFAULT,
-            SANITIZE_TOPICS_IMPORTANCE,
-            SANITIZE_TOPICS_DOC
-        ).define(
-            TOPIC2TABLE_MAP_CONFIG,
-            TOPIC2TABLE_MAP_TYPE,
-            TOPIC2TABLE_MAP_DEFAULT,
-            TOPIC2TABLE_MAP_VALIDATOR,
-            TOPIC2TABLE_MAP_IMPORTANCE,
-            TOPIC2TABLE_MAP_DOC
-        ).define(
-            SANITIZE_FIELD_NAME_CONFIG,
-            SANITIZE_FIELD_NAME_TYPE,
-            SANITIZE_FIELD_NAME_DEFAULT,
-            SANITIZE_FIELD_NAME_IMPORTANCE,
-            SANITIZE_FIELD_NAME_DOC
-        ).define(
-            KAFKA_KEY_FIELD_NAME_CONFIG,
-            KAFKA_KEY_FIELD_NAME_TYPE,
-            KAFKA_KEY_FIELD_NAME_DEFAULT,
-            KAFKA_KEY_FIELD_NAME_IMPORTANCE,
-            KAFKA_KEY_FIELD_NAME_DOC
-        ).define(
-            KAFKA_DATA_FIELD_NAME_CONFIG,
-            KAFKA_DATA_FIELD_NAME_TYPE,
-            KAFKA_DATA_FIELD_NAME_DEFAULT,
-            KAFKA_DATA_FIELD_NAME_VALIDATOR,
-            KAFKA_DATA_FIELD_NAME_IMPORTANCE,
-            KAFKA_DATA_FIELD_NAME_DOC
-        ).define(
-            AVRO_DATA_CACHE_SIZE_CONFIG,
-            AVRO_DATA_CACHE_SIZE_TYPE,
-            AVRO_DATA_CACHE_SIZE_DEFAULT,
-            AVRO_DATA_CACHE_SIZE_VALIDATOR,
-            AVRO_DATA_CACHE_SIZE_IMPORTANCE,
-            AVRO_DATA_CACHE_SIZE_DOC
-        ).define(
-            ALL_BQ_FIELDS_NULLABLE_CONFIG,
-            ALL_BQ_FIELDS_NULLABLE_TYPE,
-            ALL_BQ_FIELDS_NULLABLE_DEFAULT,
-            ALL_BQ_FIELDS_NULLABLE_IMPORTANCE,
-            ALL_BQ_FIELDS_NULLABLE_DOC
-        ).define(
-            CONVERT_DOUBLE_SPECIAL_VALUES_CONFIG,
-            CONVERT_DOUBLE_SPECIAL_VALUES_TYPE,
-            CONVERT_DOUBLE_SPECIAL_VALUES_DEFAULT,
-            CONVERT_DOUBLE_SPECIAL_VALUES_IMPORTANCE,
-            CONVERT_DOUBLE_SPECIAL_VALUES_DOC
-        ).define(
-            TABLE_CREATE_CONFIG,
-            TABLE_CREATE_TYPE,
-            TABLE_CREATE_DEFAULT,
-            TABLE_CREATE_IMPORTANCE,
-            TABLE_CREATE_DOC
-        ).define(
-            AUTO_CREATE_BUCKET_CONFIG,
-            AUTO_CREATE_BUCKET_TYPE,
-            AUTO_CREATE_BUCKET_DEFAULT,
-            AUTO_CREATE_BUCKET_IMPORTANCE,
-            AUTO_CREATE_BUCKET_DOC
-        ).define(
-            ALLOW_NEW_BIGQUERY_FIELDS_CONFIG,
-            ALLOW_NEW_BIGQUERY_FIELDS_TYPE,
-            ALLOW_NEW_BIGQUERY_FIELDS_DEFAULT,
-            ALLOW_NEW_BIGQUERY_FIELDS_IMPORTANCE,
-            ALLOW_NEW_BIGQUERY_FIELDS_DOC
-        ).define(
-            ALLOW_BIGQUERY_REQUIRED_FIELD_RELAXATION_CONFIG,
-            ALLOW_BIGQUERY_REQUIRED_FIELD_RELAXATION_TYPE,
-            ALLOW_BIGQUERY_REQUIRED_FIELD_RELAXATION_DEFAULT,
-            ALLOW_BIGQUERY_REQUIRED_FIELD_RELAXATION_IMPORTANCE,
-            ALLOW_BIGQUERY_REQUIRED_FIELD_RELAXATION_DOC
-        ).define(
-            ALLOW_SCHEMA_UNIONIZATION_CONFIG,
-            ALLOW_SCHEMA_UNIONIZATION_TYPE,
-            ALLOW_SCHEMA_UNIONIZATION_DEFAULT,
-            ALLOW_SCHEMA_UNIONIZATION_IMPORTANCE,
-            ALLOW_SCHEMA_UNIONIZATION_DOC
-        ).define(
-            UPSERT_ENABLED_CONFIG,
-            UPSERT_ENABLED_TYPE,
-            UPSERT_ENABLED_DEFAULT,
-            UPSERT_ENABLED_IMPORTANCE,
-            UPSERT_ENABLED_DOC
-        ).define(
-            DELETE_ENABLED_CONFIG,
-            DELETE_ENABLED_TYPE,
-            DELETE_ENABLED_DEFAULT,
-            DELETE_ENABLED_IMPORTANCE,
-            DELETE_ENABLED_DOC
-        ).define(
-            INTERMEDIATE_TABLE_SUFFIX_CONFIG,
-            INTERMEDIATE_TABLE_SUFFIX_TYPE,
-            INTERMEDIATE_TABLE_SUFFIX_DEFAULT,
-            INTERMEDIATE_TABLE_SUFFIX_VALIDATOR,
-            INTERMEDIATE_TABLE_SUFFIX_IMPORTANCE,
-            INTERMEDIATE_TABLE_SUFFIX_DOC
-        ).define(
-            MERGE_INTERVAL_MS_CONFIG,
-            MERGE_INTERVAL_MS_TYPE,
-            MERGE_INTERVAL_MS_DEFAULT,
-            MERGE_INTERVAL_MS_VALIDATOR,
-            MERGE_INTERVAL_MS_IMPORTANCE,
-            MERGE_INTERVAL_MS_DOC
-        ).define(
-            MERGE_RECORDS_THRESHOLD_CONFIG,
-            MERGE_RECORDS_THRESHOLD_TYPE,
-            MERGE_RECORDS_THRESHOLD_DEFAULT,
-            MERGE_RECORDS_THRESHOLD_VALIDATOR,
-            MERGE_RECORDS_THRESHOLD_IMPORTANCE,
-            MERGE_RECORDS_THRESHOLD_DOC
-        ).define(
-            THREAD_POOL_SIZE_CONFIG,
-            THREAD_POOL_SIZE_TYPE,
-            THREAD_POOL_SIZE_DEFAULT,
-            THREAD_POOL_SIZE_VALIDATOR,
-            THREAD_POOL_SIZE_IMPORTANCE,
-            THREAD_POOL_SIZE_DOC
-        ).define(
-            QUEUE_SIZE_CONFIG,
-            QUEUE_SIZE_TYPE,
-            QUEUE_SIZE_DEFAULT,
-            QUEUE_SIZE_VALIDATOR,
-            QUEUE_SIZE_IMPORTANCE,
-            QUEUE_SIZE_DOC
-        ).define(
-            BIGQUERY_RETRY_CONFIG,
-            BIGQUERY_RETRY_TYPE,
-            BIGQUERY_RETRY_DEFAULT,
-            BIGQUERY_RETRY_VALIDATOR,
-            BIGQUERY_RETRY_IMPORTANCE,
-            BIGQUERY_RETRY_DOC
-        ).define(
-            BIGQUERY_RETRY_WAIT_CONFIG,
-            BIGQUERY_RETRY_WAIT_CONFIG_TYPE,
-            BIGQUERY_RETRY_WAIT_DEFAULT,
-            BIGQUERY_RETRY_WAIT_VALIDATOR,
-            BIGQUERY_RETRY_WAIT_IMPORTANCE,
-            BIGQUERY_RETRY_WAIT_DOC
-        ).define(
-            BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG,
-            BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG_TYPE,
-            BIGQUERY_MESSAGE_TIME_PARTITIONING_DEFAULT,
-            BIGQUERY_MESSAGE_TIME_PARTITIONING_IMPORTANCE,
-            BIGQUERY_MESSAGE_TIME_PARTITIONING_DOC
-        ).define(
-            BIGQUERY_PARTITION_DECORATOR_CONFIG,
-            BIGQUERY_PARTITION_DECORATOR_CONFIG_TYPE,
-            BIGQUERY_PARTITION_DECORATOR_DEFAULT,
-            BIGQUERY_PARTITION_DECORATOR_IMPORTANCE,
-            BIGQUERY_PARTITION_DECORATOR_DOC
-        ).define(
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_CONFIG,
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_TYPE,
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_DEFAULT,
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_VALIDATOR,
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_IMPORTANCE,
-            BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_DOC
-        ).define(
-            BIGQUERY_CLUSTERING_FIELD_NAMES_CONFIG,
-            BIGQUERY_CLUSTERING_FIELD_NAMES_TYPE,
-            BIGQUERY_CLUSTERING_FIELD_NAMES_DEFAULT,
-            BIGQUERY_CLUSTERING_FIELD_NAMES_VALIDATOR,
-            BIGQUERY_CLUSTERING_FIELD_NAMES_IMPORTANCE,
-            BIGQUERY_CLUSTERING_FIELD_NAMES_DOC
-        ).define(
-            TIME_PARTITIONING_TYPE_CONFIG,
-            TIME_PARTITIONING_TYPE_TYPE,
-            TIME_PARTITIONING_TYPE_DEFAULT,
-            (name, value) -> {
-              if (value == null) {
-                return;
-              }
-              String[] validStrings = TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).toArray(String[]::new);
-              String lowercaseValue = ((String) value).toLowerCase();
-              ConfigDef.ValidString.in(validStrings).ensureValid(name, lowercaseValue);
-            },
-            TIME_PARTITIONING_TYPE_IMPORTANCE,
-            TIME_PARTITIONING_TYPE_DOC,
-            "",
-            -1,
-            ConfigDef.Width.NONE,
-            TIME_PARTITIONING_TYPE_CONFIG,
-            new ConfigDef.Recommender() {
-              @Override
-              public List<Object> validValues(String s, Map<String, Object> map) {
-                // Construct a new list to transform from List<String> to List<Object>
-                return new ArrayList<>(TIME_PARTITIONING_TYPES);
-              }
->>>>>>> 6d8e054 (Prototype of upsert-only with Storage Write API)
-
-                                @Override
-                                public String toString() {
-                                  return TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).collect(Collectors.joining(", "));
-                                }
-                              })
+                                    (name, value) -> {
+                                      if (value == null) {
+                                        return;
+                                      }
+                                      String[] validStrings = TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).toArray(String[]::new);
+                                      String lowercaseValue = ((String) value).toLowerCase();
+                                      ConfigDef.ValidString.in(validStrings).ensureValid(name, lowercaseValue);
+                                    })
                             .importance(TIME_PARTITIONING_TYPE_IMPORTANCE)
                             .documentation(TIME_PARTITIONING_TYPE_DOC)
-                            .recommender(
-                              new ConfigDef.Recommender() {
-                                @Override
-                                public List<Object> validValues(String s, Map<String, Object> map) {
-                                  // Construct a new list to transform from List<String> to List<Object>
-                                  return new ArrayList<>(TIME_PARTITIONING_TYPES);
-                                }
-
-                                @Override
-                                public boolean visible(String s, Map<String, Object> map) {
-                                  return true;
-                                }
-                              })
+                            .recommender(new ConfigDef.Recommender() {
+                              @Override
+                              public List<Object> validValues(String s, Map<String, Object> map) {
+                                return new ArrayList<>(TIME_PARTITIONING_TYPES);
+                              }
+                              @Override
+                              public boolean visible(String s, Map<String, Object> map) {
+                                return true;
+                              }
+                            })
                             .build()
             ).define(
                     BIGQUERY_PARTITION_EXPIRATION_CONFIG,
@@ -1541,7 +1261,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
     }
     Map<String, String> topic2TableMap = new HashMap<>();
     // It's already validated, so we can just populate the map
-    for (String str : topic2TableMapString.split(",")) {
+    for (String str : topic2TableMapString.split(',')) {
       String[] tt = str.split(":");
       String topic = tt[0].trim();
       String table = tt[1].trim();

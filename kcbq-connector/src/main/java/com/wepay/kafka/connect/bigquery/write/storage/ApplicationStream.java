@@ -104,7 +104,8 @@ public class ApplicationStream {
   @Deprecated
   public ApplicationStream(String tableName, BigQueryWriteClient client) throws Exception {
     this(tableName, client, streamOrTableName ->
-            JsonStreamWriter.newBuilder(streamOrTableName, client).build()
+            JsonStreamWriter.newBuilder(streamOrTableName, client).build(),
+            false
     );
   }
 

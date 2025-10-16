@@ -25,6 +25,7 @@ package com.wepay.kafka.connect.bigquery.write.storage;
 
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.storage.v1.TableName;
+import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.utils.PartitionedTableId;
 import com.wepay.kafka.connect.bigquery.utils.SinkRecordConverter;
 import com.wepay.kafka.connect.bigquery.utils.TableNameUtils;
@@ -99,7 +100,7 @@ public class StorageWriteApiWriter implements Runnable {
     private final StorageApiBatchModeHandler batchModeHandler;
 
     /**
-     * @deprecated Use {@link #Builder(StorageWriteApiBase, PartitionedTableId, SinkRecordConverter, StorageApiBatchModeHandler)} instead.
+     * @deprecated Use {@link #Builder(StorageWriteApiBase, PartitionedTableId, SinkRecordConverter, BigQuerySinkConfig, StorageApiBatchModeHandler)} instead.
      */
     @Deprecated
     public Builder(StorageWriteApiBase streamWriter,
