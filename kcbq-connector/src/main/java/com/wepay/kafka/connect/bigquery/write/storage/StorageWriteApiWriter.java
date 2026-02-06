@@ -39,7 +39,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Storage Write API writer that attempts to write all the rows it is given at once
+ * Storage Write API writer that attempts to write all the rows it is given at
+ * once
  */
 public class StorageWriteApiWriter implements Runnable {
 
@@ -55,13 +56,15 @@ public class StorageWriteApiWriter implements Runnable {
    * @param streamWriter The stream writer to use - Default, Batch etc
    * @param records      The records to write
    * @param streamName   The stream to use while writing data
-   * @deprecated Use {@link #StorageWriteApiWriter(PartitionedTableId, StorageWriteApiBase, List, String)} instead.
+   * @deprecated Use
+   *             {@link #StorageWriteApiWriter(PartitionedTableId, StorageWriteApiBase, List, String)}
+   *             instead.
    */
   @Deprecated
   public StorageWriteApiWriter(TableName tableName,
-                               StorageWriteApiBase streamWriter,
-                               List<ConvertedRecord> records,
-                               String streamName) {
+      StorageWriteApiBase streamWriter,
+      List<ConvertedRecord> records,
+      String streamName) {
     this(TableNameUtils.partitionedTableId(tableName), streamWriter, records, streamName);
   }
 
@@ -71,7 +74,8 @@ public class StorageWriteApiWriter implements Runnable {
    * @param records      The records to write
    * @param streamName   The stream to use while writing data
    */
-  public StorageWriteApiWriter(PartitionedTableId table, StorageWriteApiBase streamWriter, List<ConvertedRecord> records, String streamName) {
+  public StorageWriteApiWriter(PartitionedTableId table, StorageWriteApiBase streamWriter,
+      List<ConvertedRecord> records, String streamName) {
     this.streamWriter = streamWriter;
     this.records = records;
     this.table = table;
@@ -94,26 +98,41 @@ public class StorageWriteApiWriter implements Runnable {
     private final PartitionedTableId table;
     private final StorageWriteApiBase streamWriter;
     private final StorageApiBatchModeHandler batchModeHandler;
+    private final boolean upsertEnabled;
+    private final boolean deleteEnabled;
 
     /**
-     * @deprecated Use {@link #Builder(StorageWriteApiBase, PartitionedTableId, SinkRecordConverter, StorageApiBatchModeHandler)} instead.
+     * @deprecated Use
+     *             {@link #Builder(StorageWriteApiBase, PartitionedTableId, SinkRecordConverter, StorageApiBatchModeHandler)}
+     *             instead.
      */
     @Deprecated
     public Builder(StorageWriteApiBase streamWriter,
-                   TableName tableName,
-                   SinkRecordConverter recordConverter,
-                   StorageApiBatchModeHandler batchModeHandler) {
-      this(streamWriter, TableNameUtils.partitionedTableId(tableName), recordConverter, batchModeHandler);
+        TableName tableName,
+        SinkRecordConverter recordConverter,
+        StorageApiBatchModeHandler batchModeHandler) {
+      this(streamWriter, TableNameUtils.partitionedTableId(tableName), recordConverter, batchModeHandler, false, false);
     }
 
     public Builder(StorageWriteApiBase streamWriter,
-                   PartitionedTableId table,
-                   SinkRecordConverter recordConverter,
-                   StorageApiBatchModeHandler batchModeHandler) {
+        PartitionedTableId table,
+        SinkRecordConverter recordConverter,
+        StorageApiBatchModeHandler batchModeHandler) {
+      this(streamWriter, table, recordConverter, batchModeHandler, false, false);
+    }
+
+    public Builder(StorageWriteApiBase streamWriter,
+        PartitionedTableId table,
+        SinkRecordConverter recordConverter,
+        StorageApiBatchModeHandler batchModeHandler,
+        boolean upsertEnabled,
+        boolean deleteEnabled) {
       this.streamWriter = streamWriter;
       this.table = table;
       this.recordConverter = recordConverter;
       this.batchModeHandler = batchModeHandler;
+      this.upsertEnabled = upsertEnabled;
+      this.deleteEnabled = deleteEnabled;
     }
 
     /**
@@ -134,11 +153,22 @@ public class StorageWriteApiWriter implements Runnable {
      */
     private JSONObject convertRecord(SinkRecord record) {
       Map<String, Object> convertedRecord = recordConverter.getRegularRow(record);
-      return getJsonFromMap(convertedRecord);
+      JSONObject jsonObject = getJsonFromMap(convertedRecord);
+
+      if (upsertEnabled || deleteEnabled) {
+        if (record.value() == null && deleteEnabled) {
+          jsonObject.put("_CHANGE_TYPE", "DELETE");
+        } else if (upsertEnabled) {
+          jsonObject.put("_CHANGE_TYPE", "UPSERT");
+        }
+        jsonObject.put("_CHANGE_SEQUENCE_NUMBER", record.kafkaOffset());
+      }
+      return jsonObject;
     }
 
     /**
-     * @return Builds Storage write API writer which would do actual data ingestion using streams
+     * @return Builds Storage write API writer which would do actual data ingestion
+     *         using streams
      */
     @Override
     public Runnable build() {

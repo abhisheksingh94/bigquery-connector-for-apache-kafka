@@ -229,7 +229,9 @@ public class BigQuerySinkTask extends SinkTask {
                 storageApiWriter,
                 table,
                 recordConverter,
-                batchHandler
+                batchHandler,
+                config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG),
+                config.getBoolean(BigQuerySinkConfig.DELETE_ENABLED_CONFIG)
             );
           } else if (config.getList(BigQuerySinkConfig.ENABLE_BATCH_CONFIG).contains(record.topic())) {
             String topic = record.topic();
