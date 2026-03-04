@@ -55,6 +55,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -71,7 +72,16 @@ public class BigQueryRecordConverterTest {
   void resetValues() {
     shouldConvertDouble = true;
     useStorageWriteApiConfig = false;
+    DebeziumLogicalConverters.remove();
+    KafkaLogicalConverters.remove();
   }
+
+  @AfterAll
+  static void cleanUpConverters() {
+    DebeziumLogicalConverters.remove();
+    KafkaLogicalConverters.remove();
+  }
+
 
   private static SinkRecord spoofSinkRecord(Schema schema, Object struct, boolean isKey) {
     if (isKey) {
@@ -257,6 +267,32 @@ public class BigQueryRecordConverterTest {
     }
   }
 
+  @Test public void testFloatSpecial() {
+    final String fieldName = "Float";
+
+    List<Float> testValues =
+            Arrays.asList(Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NaN);
+    List<Float> expectedValues =
+            Arrays.asList(Float.MAX_VALUE, Float.MIN_VALUE, Float.MIN_VALUE);
+    assertEquals(testValues.size(), expectedValues.size());
+
+    for (int test = 0; test < testValues.size(); ++test) {
+      Map<String, Object> bigQueryExpectedRecord = new HashMap<>();
+      bigQueryExpectedRecord.put(fieldName, expectedValues.get(test));
+
+      Schema kafkaConnectSchema = SchemaBuilder
+              .struct()
+              .field(fieldName, Schema.FLOAT32_SCHEMA)
+              .build();
+
+      Struct kafkaConnectStruct = new Struct(kafkaConnectSchema);
+      kafkaConnectStruct.put(fieldName, testValues.get(test));
+      SinkRecord kafkaConnectRecord = spoofSinkRecord(kafkaConnectSchema, kafkaConnectStruct, false);
+
+      Map<String, Object> bigQueryTestRecord = createConverter().convertRecord(kafkaConnectRecord, KafkaSchemaRecordType.VALUE);
+      assertEquals(bigQueryExpectedRecord, bigQueryTestRecord);
+    }
+  }
   @Test
   public void testString() {
     final String fieldName = "String";

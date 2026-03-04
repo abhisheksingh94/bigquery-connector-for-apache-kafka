@@ -3,6 +3,85 @@
 
 All releases can be found at https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/releases
 
+## v2.12.0
+### What's changed
+- upgraded to google-utils v1.1.0 and system v1.1.0
+
+
+### Co-authored by
+- Claude Warren
+
+### Full Changelog
+https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/compare/v2.11.0...v2.12.0
+
+## v2.11.0
+### What's changed
+- Fix for CVE-2026-23529
+- Updated versions
+    - Java 8 -> 17
+    - confluent 7.6.0 -> 7.9.5
+    - jackson 2.14.2 -> 2.20.1
+    - kafka 3.6.1 -> 3.8.1
+- Introducted
+    - aiven-commons:system:1.0.0
+    - aiven-commons:google-utils:1.0.0
+- updated README
+
+
+### Co-authored by
+- Aindriú Lavelle
+- Audrey Budryte
+- Claude Warren
+
+
+### Full Changelog
+https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/compare/v2.10.3...v2.11.0
+
+
+## v2.10.3
+### What's changed
+ - fix: populate LogicalConverterRegistry in Task
+
+### Co-authored by
+ - Claude Warren
+
+
+### Full Changelog
+https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/compare/v2.10.2...v2.10.3
+
+## v2.10.2
+### What's changed
+- Fix serializing Infinity/NaN for Floats when convertDoubleSpecialValues is enabled (#162)
+- Fix bug with SchemaManager causing records to be placed on DLQ (#163)
+- Update documentation for DECIMAL_HANDLING_MODE_CONFIG (#156)
+
+### Co-authored by
+- Aindriú Lavelle
+- Claude Warren
+- Erik Gustafsson
+- HieuNT
+- Ryan Skraba
+
+
+### Full Changelog
+https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/compare/v2.10.1...v2.10.2
+
+## v2.10.1
+### What's changed
+- Fix potential silent data loss caused by stale BigQuery load job status not being refreshed (#155)
+- Fix data loss from BigQuery write exception during GCSBatchTableWriter run (#153)
+- Fix documentation error: the comments were attached to the wrong functions (#150)
+- Bump version to 2.11.0-SNAPSHOT
+
+### Co-authored by
+- Claude Warren
+- Gyllsdorff
+- Pammi-Jyothi
+- Ryan Skraba
+
+### Full Changelog
+https://github.com/Aiven-Open/bigquery-connector-for-apache-kafka/compare/v2.10.0...v2.10.1
+
 ## v2.10.0
 ### What's changed
 - Add ability to ignore unknown fields in kafka messages (#88)
