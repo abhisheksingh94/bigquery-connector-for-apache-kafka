@@ -29,9 +29,13 @@ import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteSettings;
 import com.google.cloud.bigquery.storage.v1.Exceptions;
+import com.google.cloud.bigquery.storage.v1.GetWriteStreamRequest;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.google.cloud.bigquery.storage.v1.RowError;
+import com.google.cloud.bigquery.storage.v1.TableFieldSchema;
 import com.google.cloud.bigquery.storage.v1.TableName;
+import com.google.cloud.bigquery.storage.v1.TableSchema;
+import com.google.cloud.bigquery.storage.v1.WriteStream;
 import com.google.common.annotations.VisibleForTesting;
 import com.wepay.kafka.connect.bigquery.ErrantRecordHandler;
 import com.wepay.kafka.connect.bigquery.SchemaManager;
@@ -70,6 +74,7 @@ public abstract class StorageWriteApiBase {
   protected final long retryWait;
   private final boolean autoCreateTables;
   private final boolean ignoreUnknownFields;
+  private final boolean isUpsertDeleteEnabled;
   private final BigQueryWriteSettings writeSettings;
   private final boolean attemptSchemaUpdate;
   protected SchemaManager schemaManager;
@@ -102,6 +107,7 @@ public abstract class StorageWriteApiBase {
     this.schemaManager = schemaManager;
     this.attemptSchemaUpdate = attemptSchemaUpdate;
     this.ignoreUnknownFields = config.isIgnoreUnknownFields();
+    this.isUpsertDeleteEnabled = config.isUpsertDeleteEnabled();
     try {
       this.writeClient = getWriteClient();
     } catch (IOException e) {
@@ -140,6 +146,7 @@ public abstract class StorageWriteApiBase {
     this.schemaManager = schemaManager;
     this.attemptSchemaUpdate = attemptSchemaUpdate;
     this.ignoreUnknownFields = false;
+    this.isUpsertDeleteEnabled = false;
     try {
       this.writeClient = getWriteClient();
     } catch (IOException e) {
@@ -378,8 +385,34 @@ public abstract class StorageWriteApiBase {
             .setMaxRetryDelay(Duration.ofMinutes(MAX_RETRY_DELAY_MINUTES))
             .build();
     return streamOrTableName -> {
-      JsonStreamWriter.Builder builder = JsonStreamWriter.newBuilder(streamOrTableName, writeClient)
-              .setRetrySettings(retrySettings)
+      JsonStreamWriter.Builder builder;
+      if (isUpsertDeleteEnabled) {
+        String streamNameToFetch = streamOrTableName;
+        if (!streamNameToFetch.contains("/streams/")) {
+          streamNameToFetch += "/streams/_default";
+        }
+        GetWriteStreamRequest request = GetWriteStreamRequest.newBuilder()
+                .setName(streamNameToFetch)
+                .build();
+        WriteStream writeStream = writeClient.getWriteStream(request);
+        TableSchema.Builder schemaBuilder = writeStream.getTableSchema().toBuilder();
+        schemaBuilder.addFields(
+                TableFieldSchema.newBuilder()
+                        .setName("_CHANGE_TYPE")
+                        .setType(TableFieldSchema.Type.STRING)
+                        .build()
+        );
+        schemaBuilder.addFields(
+                TableFieldSchema.newBuilder()
+                        .setName("_CHANGE_SEQUENCE_NUMBER")
+                        .setType(TableFieldSchema.Type.INT64)
+                        .build()
+        );
+        builder = JsonStreamWriter.newBuilder(streamOrTableName, schemaBuilder.build(), writeClient);
+      } else {
+        builder = JsonStreamWriter.newBuilder(streamOrTableName, writeClient);
+      }
+      builder.setRetrySettings(retrySettings)
               .setIgnoreUnknownFields(ignoreUnknownFields)
               .setTraceId(generateTraceId());
       updateJsonStreamWriterBuilder(builder);
