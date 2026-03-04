@@ -352,12 +352,14 @@ public class BigQuerySinkTask extends SinkTask {
     Optional<List<String>> clusteringFieldName = config.getClusteringPartitionFieldNames();
     Optional<TimePartitioning.Type> timePartitioningType = config.getTimePartitioningType();
     boolean sanitizeFieldNames = config.getBoolean(BigQuerySinkConfig.SANITIZE_FIELD_NAME_CONFIG);
+    // Use Kafka keys as primary keys when Storage API is used with upsert/delete
+    boolean kafkaKeyAsPrimaryKey = useStorageApi && upsertDelete;
     return new SchemaManager(schemaRetriever, schemaConverter, getBigQuery(),
         allowNewBigQueryFields, allowRequiredFieldRelaxation, allowSchemaUnionization,
         sanitizeFieldNames,
         kafkaKeyFieldName, kafkaDataFieldName,
         timestampPartitionFieldName, partitionExpiration, clusteringFieldName, timePartitioningType,
-        useStorageApi);
+        kafkaKeyAsPrimaryKey);
   }
 
   private BigQueryWriter getBigQueryWriter(ErrantRecordHandler errantRecordHandler) {
@@ -437,7 +439,7 @@ public class BigQuerySinkTask extends SinkTask {
     autoCreateTables = config.getBoolean(BigQuerySinkConfig.TABLE_CREATE_CONFIG);
     useStorageApi = config.getBoolean(BigQuerySinkConfig.USE_STORAGE_WRITE_API_CONFIG);
     useStorageApiBatchMode = useStorageApi && config.getBoolean(BigQuerySinkConfig.ENABLE_BATCH_MODE_CONFIG);
-    upsertDelete = !useStorageApi && (config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG)
+    upsertDelete = (config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG)
             || config.getBoolean(BigQuerySinkConfig.DELETE_ENABLED_CONFIG));
 
     retry = config.getInt(BigQuerySinkConfig.BIGQUERY_RETRY_CONFIG);

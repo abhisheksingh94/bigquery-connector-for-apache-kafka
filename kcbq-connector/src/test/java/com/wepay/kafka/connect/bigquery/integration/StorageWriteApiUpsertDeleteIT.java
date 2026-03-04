@@ -103,7 +103,8 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
       result.put(BigQuerySinkConfig.DELETE_ENABLED_CONFIG, "true");
     }
 
-    result.put(BigQuerySinkConfig.KAFKA_KEY_FIELD_NAME_CONFIG, "");
+    // Set the Kafka key field name to "k1" to match the key schema used in the test
+    result.put(BigQuerySinkConfig.KAFKA_KEY_FIELD_NAME_CONFIG, "k1");
 
     return result;
   }
