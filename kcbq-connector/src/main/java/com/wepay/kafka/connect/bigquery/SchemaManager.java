@@ -32,7 +32,9 @@ import com.google.cloud.bigquery.Clustering;
 import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.Field.Mode;
 import com.google.cloud.bigquery.LegacySQLTypeName;
+import com.google.cloud.bigquery.PrimaryKey;
 import com.google.cloud.bigquery.StandardTableDefinition;
+import com.google.cloud.bigquery.TableConstraints;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TimePartitioning;
@@ -77,6 +79,7 @@ public class SchemaManager {
   private final Optional<Long> partitionExpiration;
   private final Optional<List<String>> clusteringFieldName;
   private final Optional<TimePartitioning.Type> timePartitioningType;
+  private final Optional<List<String>> tablePrimaryKeyFields;
   private final boolean intermediateTables;
   private final ConcurrentMap<TableId, Object> tableCreateLocks;
   private final ConcurrentMap<TableId, Object> tableUpdateLocks;
@@ -115,7 +118,8 @@ public class SchemaManager {
       Optional<String> timestampPartitionFieldName,
       Optional<Long> partitionExpiration,
       Optional<List<String>> clusteringFieldName,
-      Optional<TimePartitioning.Type> timePartitioningType) {
+      Optional<TimePartitioning.Type> timePartitioningType,
+      Optional<List<String>> tablePrimaryKeyFields) {
     this(
         schemaRetriever,
         schemaConverter,
@@ -130,6 +134,7 @@ public class SchemaManager {
         partitionExpiration,
         clusteringFieldName,
         timePartitioningType,
+        tablePrimaryKeyFields,
         false,
         new ConcurrentHashMap<>(),
         new ConcurrentHashMap<>(),
@@ -150,6 +155,7 @@ public class SchemaManager {
       Optional<Long> partitionExpiration,
       Optional<List<String>> clusteringFieldName,
       Optional<TimePartitioning.Type> timePartitioningType,
+      Optional<List<String>> tablePrimaryKeyFields,
       boolean intermediateTables,
       ConcurrentMap<TableId, Object> tableCreateLocks,
       ConcurrentMap<TableId, Object> tableUpdateLocks,
@@ -167,6 +173,7 @@ public class SchemaManager {
     this.partitionExpiration = partitionExpiration;
     this.clusteringFieldName = clusteringFieldName;
     this.timePartitioningType = timePartitioningType;
+    this.tablePrimaryKeyFields = tablePrimaryKeyFields;
     this.intermediateTables = intermediateTables;
     this.tableCreateLocks = tableCreateLocks;
     this.tableUpdateLocks = tableUpdateLocks;
@@ -188,6 +195,7 @@ public class SchemaManager {
         partitionExpiration,
         clusteringFieldName,
         timePartitioningType,
+        tablePrimaryKeyFields,
         true,
         tableCreateLocks,
         tableUpdateLocks,
@@ -626,6 +634,11 @@ public class SchemaManager {
               .build();
           builder.setClustering(clustering);
         }
+      });
+      tablePrimaryKeyFields.ifPresent(fields -> {
+        builder.setTableConstraints(TableConstraints.newBuilder()
+            .setPrimaryKey(PrimaryKey.newBuilder().setColumns(fields).build())
+            .build());
       });
     }
 

@@ -167,6 +167,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
   public static final Boolean BIGQUERY_PARTITION_DECORATOR_DEFAULT = true;
   public static final String BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_CONFIG = "timestampPartitionFieldName";
   public static final String BIGQUERY_CLUSTERING_FIELD_NAMES_CONFIG = "clusteringPartitionFieldNames";
+  public static final String TABLE_PRIMARY_KEY_FIELDS_CONFIG = "tablePrimaryKeyFields";
 
   public static final String PRESERVE_KAFKA_TOPIC_PARTITION_OFFSET__CONFIG = "preserveKafkaTopicPartitionOffset";
   public static final ConfigDef.Type PRESERVE_KAFKA_TOPIC_PARTITION_OFFSET__TYPE = ConfigDef.Type.BOOLEAN;
@@ -1044,6 +1045,13 @@ public class BigQuerySinkConfig extends AbstractConfig {
                             .documentation(PRESERVE_KAFKA_TOPIC_PARTITION_OFFSET__DOC)
                             .since("2.8.0")
                             .build()
+            ).define(
+                    TABLE_PRIMARY_KEY_FIELDS_CONFIG,
+                    ConfigDef.Type.LIST,
+                    null,
+                    ConfigDef.Importance.MEDIUM,
+                    "List of fields that make up the primary key for the destination table. "
+                            + "This is required for BigQuery CDC when using the Storage Write API."
             );
   }
 
@@ -1301,6 +1309,17 @@ public class BigQuerySinkConfig extends AbstractConfig {
     return Optional
         .ofNullable(getList(BIGQUERY_CLUSTERING_FIELD_NAMES_CONFIG))
         // With Java 11 there's Predicate::not, but for now we have to just manually invert the isEmpty check
+        .filter(l -> !l.isEmpty());
+  }
+
+  /**
+   * Returns the field names to use for the primary key.
+   *
+   * @return List of Strings that represent the primary key field names.
+   */
+  public Optional<List<String>> getTablePrimaryKeyFields() {
+    return Optional
+        .ofNullable(getList(TABLE_PRIMARY_KEY_FIELDS_CONFIG))
         .filter(l -> !l.isEmpty());
   }
 
