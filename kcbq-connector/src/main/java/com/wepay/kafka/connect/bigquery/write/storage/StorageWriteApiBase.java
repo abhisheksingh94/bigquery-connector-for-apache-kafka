@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.bp.Duration;
@@ -66,12 +67,18 @@ public abstract class StorageWriteApiBase {
   private static final int MAX_RETRY_DELAY_MINUTES = 1;
   public static final String TRACE_ID_FORMAT = "AivenKafkaConnector:%s";
   protected final JsonStreamWriterFactory jsonWriterFactory;
+  // TODO: This should be private
+  protected static final String CHANGE_TYPE_PSEUDO_COLUMN = "_CHANGE_TYPE";
   protected final int retry;
   protected final long retryWait;
   private final boolean autoCreateTables;
   private final boolean ignoreUnknownFields;
   private final BigQueryWriteSettings writeSettings;
   private final boolean attemptSchemaUpdate;
+
+  protected final boolean upsertEnabled;
+  protected final boolean deleteEnabled;
+
   protected SchemaManager schemaManager;
   @VisibleForTesting
   protected Time time;
@@ -102,6 +109,8 @@ public abstract class StorageWriteApiBase {
     this.schemaManager = schemaManager;
     this.attemptSchemaUpdate = attemptSchemaUpdate;
     this.ignoreUnknownFields = config.isIgnoreUnknownFields();
+    this.upsertEnabled = config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG);
+    this.deleteEnabled = config.getBoolean(BigQuerySinkConfig.DELETE_ENABLED_CONFIG);
     try {
       this.writeClient = getWriteClient();
     } catch (IOException e) {
@@ -132,22 +141,16 @@ public abstract class StorageWriteApiBase {
                                 ErrantRecordHandler errantRecordHandler,
                                 SchemaManager schemaManager,
                                 boolean attemptSchemaUpdate) {
-    this.retry = retry;
-    this.retryWait = retryWait;
-    this.autoCreateTables = autoCreateTables;
-    this.writeSettings = writeSettings;
-    this.errantRecordHandler = errantRecordHandler;
-    this.schemaManager = schemaManager;
-    this.attemptSchemaUpdate = attemptSchemaUpdate;
-    this.ignoreUnknownFields = false;
-    try {
-      this.writeClient = getWriteClient();
-    } catch (IOException e) {
-      logger.error("Failed to create Big Query Storage Write API write client due to {}", e.getMessage());
-      throw new BigQueryStorageWriteApiConnectException("Failed to create Big Query Storage Write API write client", e);
-    }
-    this.jsonWriterFactory = getJsonWriterFactory();
-    this.time = Time.SYSTEM;
+    this(
+        retry,
+        retryWait,
+        writeSettings,
+        autoCreateTables,
+        errantRecordHandler,
+        schemaManager,
+        attemptSchemaUpdate,
+        null
+    );
   }
 
   public abstract void preShutdown();
@@ -493,6 +496,12 @@ public abstract class StorageWriteApiBase {
   private JSONArray getJsonRecords(List<ConvertedRecord> rows) {
     JSONArray jsonRecords = new JSONArray();
     for (ConvertedRecord item : rows) {
+      JSONObject converted = item.converted();
+      if (item.original().value() != null && upsertEnabled) {
+        converted.put(CHANGE_TYPE_PSEUDO_COLUMN, "UPSERT");
+      } else if (item.original().value() == null && deleteEnabled) {
+        converted.put(CHANGE_TYPE_PSEUDO_COLUMN, "DELETE");
+      }
       jsonRecords.put(item.converted());
     }
     return jsonRecords;

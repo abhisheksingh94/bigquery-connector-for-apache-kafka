@@ -698,7 +698,7 @@ public class BigQuerySinkTaskTest {
     Storage storage = mock(Storage.class);
 
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
-    when(bigQuery.insertAll(any(InsertAllRequest.class)))
+    when(bigQuery.insertAll(any()))
         .thenThrow(new BigQueryException(500, "mock 500"))
         .thenThrow(new BigQueryException(502, "mock 502"))
         .thenThrow(new BigQueryException(503, "mock 503"))
@@ -724,7 +724,7 @@ public class BigQuerySinkTaskTest {
     testTask.put(Collections.singletonList(spoofSinkRecord(topic)));
     testTask.flush(Collections.emptyMap());
 
-    verify(bigQuery, times(4)).insertAll(any(InsertAllRequest.class));
+    verify(bigQuery, times(4)).insertAll(any());
   }
 
   @Test
@@ -748,7 +748,7 @@ public class BigQuerySinkTaskTest {
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
     BigQueryError quotaExceededError = new BigQueryError("quotaExceeded", null, null);
     BigQueryError rateLimitExceededError = new BigQueryError("rateLimitExceeded", null, null);
-    when(bigQuery.insertAll(any(InsertAllRequest.class)))
+    when(bigQuery.insertAll(any()))
         .thenThrow(new BigQueryException(403, "mock quota exceeded", quotaExceededError))
         .thenThrow(new BigQueryException(403, "mock rate limit exceeded", rateLimitExceededError))
         .thenReturn(insertAllResponse);
@@ -773,7 +773,7 @@ public class BigQuerySinkTaskTest {
     testTask.put(Collections.singletonList(spoofSinkRecord(topic)));
     testTask.flush(Collections.emptyMap());
 
-    verify(bigQuery, times(3)).insertAll(any(InsertAllRequest.class));
+    verify(bigQuery, times(3)).insertAll(any());
   }
 
   @Test
@@ -796,7 +796,7 @@ public class BigQuerySinkTaskTest {
 
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
     BigQueryError quotaExceededError = new BigQueryError("quotaExceeded", null, null);
-    when(bigQuery.insertAll(any(InsertAllRequest.class)))
+    when(bigQuery.insertAll(any()))
         .thenThrow(new BigQueryException(403, "mock quota exceeded", quotaExceededError));
     when(insertAllResponse.hasErrors()).thenReturn(false);
 
@@ -895,7 +895,7 @@ public class BigQuerySinkTaskTest {
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
 
-    when(bigQuery.insertAll(any(InsertAllRequest.class))).thenReturn(insertAllResponse);
+    when(bigQuery.insertAll(any())).thenReturn(insertAllResponse);
     when(insertAllResponse.hasErrors()).thenReturn(false);
 
     SchemaRetriever schemaRetriever = mock(SchemaRetriever.class);

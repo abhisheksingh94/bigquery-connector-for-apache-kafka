@@ -147,7 +147,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
   public static final String INTERMEDIATE_TABLE_SUFFIX_DEFAULT = "tmp";
   public static final String MERGE_INTERVAL_MS_CONFIG = "mergeIntervalMs";
   public static final String MERGE_RECORDS_THRESHOLD_CONFIG = "mergeRecordsThreshold";
-  public static final long MERGE_INTERVAL_MS_DEFAULT = 60_000L;
+  public static final long MERGE_INTERVAL_MS_DEFAULT = 60000L;
   public static final long MERGE_RECORDS_THRESHOLD_DEFAULT = -1;
   public static final String THREAD_POOL_SIZE_CONFIG = "threadPoolSize";
   public static final Integer THREAD_POOL_SIZE_DEFAULT = 10;
@@ -351,10 +351,10 @@ public class BigQuerySinkConfig extends AbstractConfig {
           + "front of field name. Note: field a.b and a_b will have same value after sanitizing, "
           + "and might cause key duplication error.";
   private static final ConfigDef.Type KAFKA_KEY_FIELD_NAME_TYPE = ConfigDef.Type.STRING;
-  private static final ConfigDef.Validator KAFKA_KEY_FIELD_NAME_VALIDATOR = new ConfigDef.NonEmptyString();
   private static final ConfigDef.Importance KAFKA_KEY_FIELD_NAME_IMPORTANCE = ConfigDef.Importance.LOW;
   private static final String KAFKA_KEY_FIELD_NAME_DOC = "The name of the field of Kafka key. "
-      + "Default to be null, which means Kafka Key Field will not be included.";
+      + "Default to be null, which means Kafka Key Field will not be included. "
+      + "To include all fields from the key in the top-level record, specify a blank string for this property.";
   private static final ConfigDef.Type KAFKA_DATA_FIELD_NAME_TYPE = ConfigDef.Type.STRING;
   private static final ConfigDef.Validator KAFKA_DATA_FIELD_NAME_VALIDATOR = new ConfigDef.NonEmptyString();
   private static final ConfigDef.Importance KAFKA_DATA_FIELD_NAME_IMPORTANCE = ConfigDef.Importance.LOW;
@@ -754,7 +754,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
                     KAFKA_KEY_FIELD_NAME_CONFIG,
                     KAFKA_KEY_FIELD_NAME_TYPE,
                     KAFKA_KEY_FIELD_NAME_DEFAULT,
-                    KAFKA_KEY_FIELD_NAME_VALIDATOR,
+                    null,
                     KAFKA_KEY_FIELD_NAME_IMPORTANCE,
                     KAFKA_KEY_FIELD_NAME_DOC
             ).define(
@@ -911,37 +911,27 @@ public class BigQuerySinkConfig extends AbstractConfig {
                             .type(TIME_PARTITIONING_TYPE_TYPE)
                             .defaultValue(TIME_PARTITIONING_TYPE_DEFAULT)
                             .validator(
-                              new ConfigDef.Validator() {
-                                @Override
-                                public void ensureValid(String name, Object value) {
-                                  if (value == null) {
-                                    return;
-                                  }
-                                  String[] validStrings = TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).toArray(String[]::new);
-                                  String lowercaseValue = ((String) value).toLowerCase();
-                                  ConfigDef.ValidString.in(validStrings).ensureValid(name, lowercaseValue);
-                                }
-
-                                @Override
-                                public String toString() {
-                                  return TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).collect(Collectors.joining(", "));
-                                }
-                              })
+                                    (name, value) -> {
+                                      if (value == null) {
+                                        return;
+                                      }
+                                      String[] validStrings = TIME_PARTITIONING_TYPES.stream().map(String::toLowerCase).toArray(String[]::new);
+                                      String lowercaseValue = ((String) value).toLowerCase();
+                                      ConfigDef.ValidString.in(validStrings).ensureValid(name, lowercaseValue);
+                                    })
                             .importance(TIME_PARTITIONING_TYPE_IMPORTANCE)
                             .documentation(TIME_PARTITIONING_TYPE_DOC)
-                            .recommender(
-                              new ConfigDef.Recommender() {
-                                @Override
-                                public List<Object> validValues(String s, Map<String, Object> map) {
-                                  // Construct a new list to transform from List<String> to List<Object>
-                                  return new ArrayList<>(TIME_PARTITIONING_TYPES);
-                                }
+                            .recommender(new ConfigDef.Recommender() {
+                              @Override
+                              public List<Object> validValues(String s, Map<String, Object> map) {
+                                return new ArrayList<>(TIME_PARTITIONING_TYPES);
+                              }
 
-                                @Override
-                                public boolean visible(String s, Map<String, Object> map) {
-                                  return true;
-                                }
-                              })
+                              @Override
+                              public boolean visible(String s, Map<String, Object> map) {
+                                return true;
+                              }
+                            })
                             .build()
             ).define(
                     BIGQUERY_PARTITION_EXPIRATION_CONFIG,
@@ -1228,6 +1218,14 @@ public class BigQuerySinkConfig extends AbstractConfig {
 
   public boolean isIgnoreUnknownFields() {
     return getBoolean(BigQuerySinkConfig.IGNORE_UNKNOWN_FIELDS_CONFIG);
+  }
+
+  public boolean isUpsertEnabled() {
+    return getBoolean(UPSERT_ENABLED_CONFIG);
+  }
+
+  public boolean isDeleteEnabled() {
+    return getBoolean(DELETE_ENABLED_CONFIG);
   }
 
   public Optional<TimePartitioning.Type> getTimePartitioningType() {

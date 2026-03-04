@@ -85,6 +85,7 @@ public class BigQueryStorageApiBatchSinkTaskTest {
   BigQuerySinkTask testTask = new BigQuerySinkTask(
       bigQuery, schemaRetriever, storage, schemaManager, mockedStorageWriteApiBatchStream, mockedBatchHandler, time);
   BigQueryStorageWriteApiConnectException exception = new BigQueryStorageWriteApiConnectException("error 12345");
+  @SuppressWarnings("unchecked")
   Map<TopicPartition, OffsetAndMetadata> mockedOffset = mock(Map.class);
 
   @BeforeEach
