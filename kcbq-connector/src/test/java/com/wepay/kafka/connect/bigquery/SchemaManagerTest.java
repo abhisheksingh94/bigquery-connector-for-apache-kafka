@@ -153,7 +153,12 @@ public class SchemaManagerTest {
         .field("type", Schema.STRING_SCHEMA)
         .build();
 
+    com.google.cloud.bigquery.Schema fakeKeyBigQuerySchema = com.google.cloud.bigquery.Schema.of(
+        Field.of("id", LegacySQLTypeName.INTEGER),
+        Field.of("type", LegacySQLTypeName.STRING)
+    );
     when(mockSchemaConverter.convertSchema(mockKafkaSchema)).thenReturn(fakeBigQuerySchema);
+    when(mockSchemaConverter.convertSchema(keySchema)).thenReturn(fakeKeyBigQuerySchema);
     when(mockSchemaRetriever.retrieveValueSchema(any())).thenReturn(mockKafkaSchema);
     when(mockSchemaRetriever.retrieveKeySchema(any())).thenReturn(keySchema);
     when(mockKafkaSchema.doc()).thenReturn(testDoc);

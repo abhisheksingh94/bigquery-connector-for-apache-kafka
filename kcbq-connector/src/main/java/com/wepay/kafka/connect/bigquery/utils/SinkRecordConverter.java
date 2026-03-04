@@ -140,6 +140,17 @@ public class SinkRecordConverter {
       result.put(fieldName, keyData);
     });
 
+    if (!config.getKafkaKeyFieldName().isPresent() && record.value() != null && record.key() != null) {
+      Map<String, Object> keyData = recordConverter.convertRecord(record, KafkaSchemaRecordType.KEY);
+      if (keyData != null) {
+        for (Map.Entry<String, Object> entry : keyData.entrySet()) {
+          if (!result.containsKey(entry.getKey())) {
+            result.put(entry.getKey(), entry.getValue());
+          }
+        }
+      }
+    }
+
     return maybeSanitize(result);
   }
 

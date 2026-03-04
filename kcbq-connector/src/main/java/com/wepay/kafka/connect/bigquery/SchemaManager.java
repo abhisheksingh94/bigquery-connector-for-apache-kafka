@@ -395,7 +395,7 @@ public class SchemaManager {
       inferPrimaryKey(table, kafkaKeySchema);
     }
     com.google.cloud.bigquery.Schema result = getBigQuerySchema(
-        kafkaKeyFieldName.isPresent() ? kafkaKeySchema : null,
+        kafkaKeySchema,
         kafkaValueSchema
     );
     return result;
@@ -668,12 +668,6 @@ public class SchemaManager {
           .build());
     }
 
-    if (clusteringFieldName.isPresent()) {
-      Clustering clustering = Clustering.newBuilder()
-          .setFields(clusteringFieldName.get())
-          .build();
-      builder.setClustering(clustering);
-    }
 
     StandardTableDefinition tableDefinition = builder.build();
     TableInfo.Builder tableInfoBuilder =
@@ -771,6 +765,17 @@ public class SchemaManager {
           LegacySQLTypeName.RECORD,
           keySchema.getFields()).setMode(Field.Mode.NULLABLE).build();
       result.add(kafkaKeyField);
+    } else if (kafkaKeySchema != null && kafkaKeySchema.type() == Schema.Type.STRUCT) {
+      // If we are inferring PKs or have explicit PKs that might be in the key, 
+      // and not using a key field name, add the key fields as top-level fields
+      com.google.cloud.bigquery.Schema keySchema = schemaConverter.convertSchema(kafkaKeySchema);
+      if (keySchema != null) {
+        for (Field keyField : keySchema.getFields()) {
+          if (result.stream().noneMatch(f -> f.getName().equalsIgnoreCase(keyField.getName()))) {
+            result.add(keyField);
+          }
+        }
+      }
     }
 
     return result;
