@@ -84,6 +84,7 @@ public class SchemaManager {
   private final ConcurrentMap<TableId, Object> tableCreateLocks;
   private final ConcurrentMap<TableId, Object> tableUpdateLocks;
   private final ConcurrentMap<TableId, com.google.cloud.bigquery.Schema> schemaCache;
+  private final ConcurrentMap<TableId, List<String>> inferredPrimaryKeys;
 
   /**
    * @param schemaRetriever                Used to determine the Kafka Connect Schema that should be used for a
@@ -138,6 +139,7 @@ public class SchemaManager {
         false,
         new ConcurrentHashMap<>(),
         new ConcurrentHashMap<>(),
+        new ConcurrentHashMap<>(),
         new ConcurrentHashMap<>());
   }
 
@@ -159,7 +161,8 @@ public class SchemaManager {
       boolean intermediateTables,
       ConcurrentMap<TableId, Object> tableCreateLocks,
       ConcurrentMap<TableId, Object> tableUpdateLocks,
-      ConcurrentMap<TableId, com.google.cloud.bigquery.Schema> schemaCache) {
+      ConcurrentMap<TableId, com.google.cloud.bigquery.Schema> schemaCache,
+      ConcurrentMap<TableId, List<String>> inferredPrimaryKeys) {
     this.schemaRetriever = schemaRetriever;
     this.schemaConverter = schemaConverter;
     this.bigQuery = bigQuery;
@@ -178,6 +181,7 @@ public class SchemaManager {
     this.tableCreateLocks = tableCreateLocks;
     this.tableUpdateLocks = tableUpdateLocks;
     this.schemaCache = schemaCache;
+    this.inferredPrimaryKeys = inferredPrimaryKeys;
   }
 
   public SchemaManager forIntermediateTables() {
@@ -199,7 +203,8 @@ public class SchemaManager {
         true,
         tableCreateLocks,
         tableUpdateLocks,
-        schemaCache
+        schemaCache,
+        inferredPrimaryKeys
     );
   }
 
@@ -334,7 +339,7 @@ public class SchemaManager {
         logger.debug(errorMessage + " Will fall back to existing schema.");
         return existingSchema;
       }
-      result = convertRecordSchema(recordToConvert);
+      result = convertRecordSchema(table, recordToConvert);
       if (existingSchema != null) {
         validateSchemaChange(existingSchema, result);
         if (allowBqRequiredFieldRelaxation) {
@@ -360,7 +365,7 @@ public class SchemaManager {
       if (kafkaValueSchema == null) {
         continue;
       }
-      bigQuerySchemas.add(convertRecordSchema(record));
+      bigQuerySchemas.add(convertRecordSchema(table, record));
     }
     return bigQuerySchemas;
   }
@@ -383,11 +388,28 @@ public class SchemaManager {
     return null;
   }
 
-  private com.google.cloud.bigquery.Schema convertRecordSchema(SinkRecord record) {
+  private com.google.cloud.bigquery.Schema convertRecordSchema(TableId table, SinkRecord record) {
     Schema kafkaValueSchema = schemaRetriever.retrieveValueSchema(record);
-    Schema kafkaKeySchema = kafkaKeyFieldName.isPresent() ? schemaRetriever.retrieveKeySchema(record) : null;
-    com.google.cloud.bigquery.Schema result = getBigQuerySchema(kafkaKeySchema, kafkaValueSchema);
+    Schema kafkaKeySchema = schemaRetriever.retrieveKeySchema(record);
+    if (!tablePrimaryKeyFields.isPresent() && !inferredPrimaryKeys.containsKey(table) && kafkaKeySchema != null) {
+      inferPrimaryKey(table, kafkaKeySchema);
+    }
+    com.google.cloud.bigquery.Schema result = getBigQuerySchema(
+        kafkaKeyFieldName.isPresent() ? kafkaKeySchema : null,
+        kafkaValueSchema
+    );
     return result;
+  }
+
+  private void inferPrimaryKey(TableId table, Schema kafkaKeySchema) {
+    if (kafkaKeySchema.type() == Schema.Type.STRUCT) {
+      List<String> pkFields = new ArrayList<>();
+      kafkaKeySchema.fields().forEach(f -> pkFields.add(f.name()));
+      if (!pkFields.isEmpty()) {
+        logger.info("Inferred primary key fields for table {}: {}", table, pkFields);
+        inferredPrimaryKeys.put(table, pkFields);
+      }
+    }
   }
 
   /**
@@ -635,11 +657,22 @@ public class SchemaManager {
           builder.setClustering(clustering);
         }
       });
-      tablePrimaryKeyFields.ifPresent(fields -> {
-        builder.setTableConstraints(TableConstraints.newBuilder()
-            .setPrimaryKey(PrimaryKey.newBuilder().setColumns(fields).build())
-            .build());
-      });
+    }
+
+    List<String> primaryKeyFields = tablePrimaryKeyFields.orElse(inferredPrimaryKeys.get(table));
+    if (primaryKeyFields != null && !primaryKeyFields.isEmpty()) {
+      builder.setTableConstraints(TableConstraints.newBuilder()
+          .setPrimaryKey(PrimaryKey.newBuilder()
+              .setColumns(primaryKeyFields)
+              .build())
+          .build());
+    }
+
+    if (clusteringFieldName.isPresent()) {
+      Clustering clustering = Clustering.newBuilder()
+          .setFields(clusteringFieldName.get())
+          .build();
+      builder.setClustering(clustering);
     }
 
     StandardTableDefinition tableDefinition = builder.build();

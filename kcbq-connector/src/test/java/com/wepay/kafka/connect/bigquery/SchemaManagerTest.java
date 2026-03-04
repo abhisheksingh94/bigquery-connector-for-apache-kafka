@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -56,6 +57,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -136,6 +138,41 @@ public class SchemaManagerTest {
         testPrimaryKey.get(),
         definition.getTableConstraints().getPrimaryKey().getColumns(),
         "The primary key columns do not match the expected columns"
+    );
+  }
+
+  @Test
+  public void testTableConstraintsInferred() {
+    // No explicit primary key in config
+    SchemaManager schemaManager = new SchemaManager(mockSchemaRetriever, mockSchemaConverter,
+        mockBigQuery, false, false, false, false, Optional.empty(), Optional.empty(), Optional.empty(),
+        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+
+    Schema keySchema = SchemaBuilder.struct()
+        .field("id", Schema.INT64_SCHEMA)
+        .field("type", Schema.STRING_SCHEMA)
+        .build();
+
+    when(mockSchemaConverter.convertSchema(mockKafkaSchema)).thenReturn(fakeBigQuerySchema);
+    when(mockSchemaRetriever.retrieveValueSchema(any())).thenReturn(mockKafkaSchema);
+    when(mockSchemaRetriever.retrieveKeySchema(any())).thenReturn(keySchema);
+    when(mockKafkaSchema.doc()).thenReturn(testDoc);
+
+    SinkRecord record = new SinkRecord("topic", 0, keySchema, new Struct(keySchema), mockKafkaSchema, null, 0);
+    
+    // Trigger schema conversion which includes inference
+    schemaManager.createTable(tableId, Collections.singletonList(record));
+
+    TableInfo tableInfo = schemaManager
+        .constructTableInfo(tableId, fakeBigQuerySchema, testDoc, true);
+
+    StandardTableDefinition definition = tableInfo.getDefinition();
+    assertNotNull(definition.getTableConstraints());
+    assertNotNull(definition.getTableConstraints().getPrimaryKey());
+    assertEquals(
+        Arrays.asList("id", "type"),
+        definition.getTableConstraints().getPrimaryKey().getColumns(),
+        "The inferred primary key columns do not match the expected columns"
     );
   }
 
