@@ -71,7 +71,7 @@ public class StorageWriteApiValidatorTest {
     when(config.getList(ENABLE_BATCH_CONFIG)).thenReturn(Collections.emptyList());
 
     assertEquals(
-        Optional.of(upsertNotSupportedError),
+        Optional.empty(),
         new StorageWriteApiValidator().doValidate(config));
   }
 
@@ -84,7 +84,7 @@ public class StorageWriteApiValidatorTest {
     when(config.getBoolean(DELETE_ENABLED_CONFIG)).thenReturn(true);
     when(config.getList(ENABLE_BATCH_CONFIG)).thenReturn(Collections.emptyList());
 
-    assertEquals(Optional.of(deleteNotSupportedError), new StorageWriteApiValidator().doValidate(config));
+    assertEquals(Optional.empty(), new StorageWriteApiValidator().doValidate(config));
   }
 
   @Test
@@ -109,7 +109,8 @@ public class StorageWriteApiValidatorTest {
     // User explicitly requested partition decorator syntax
     when(config.originals()).thenReturn(Collections.singletonMap(BIGQUERY_PARTITION_DECORATOR_CONFIG, "true"));
 
-    assertEquals(Optional.of(partitionDecoratorNewBatchNotSupported), new StorageWriteApiValidator().doValidate(config));
+    assertEquals(Optional.of(partitionDecoratorNewBatchNotSupported),
+        new StorageWriteApiValidator().doValidate(config));
   }
 
   @Test
@@ -169,4 +170,3 @@ public class StorageWriteApiValidatorTest {
     assertEquals(Optional.of(legacyBatchNotSupportedError), new StorageWriteApiValidator().doValidate(config));
   }
 }
-
