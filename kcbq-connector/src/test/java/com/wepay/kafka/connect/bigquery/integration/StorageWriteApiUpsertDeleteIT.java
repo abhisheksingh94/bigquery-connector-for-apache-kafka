@@ -89,12 +89,12 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     // use the JSON converter with schemas enabled
     result.put(KEY_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
     result.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
-    // Ensure that records are delivered across several different batches, so that preflight
+    // Ensure that records are delivered across several different batches, so that
+    // preflight
     // compaction doesn't handle all upsert logic before anything hits BigQuery
     result.put(
         CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + MAX_POLL_RECORDS_CONFIG,
-        Long.toString(Math.max(1, NUM_RECORDS_PRODUCED / 10))
-    );
+        Long.toString(Math.max(1, NUM_RECORDS_PRODUCED / 10)));
 
     if (upsert) {
       result.put(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG, "true");
@@ -104,7 +104,7 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     }
 
     // Set the Kafka key field name to "k1" to match the key schema used in the test
-    result.put(BigQuerySinkConfig.KAFKA_KEY_FIELD_NAME_CONFIG, "k1");
+    result.put(BigQuerySinkConfig.KAFKA_KEY_FIELD_NAME_CONFIG, "");
 
     return result;
   }
@@ -143,7 +143,8 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
 
     // Send records to Kafka
     for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-      // Each pair of records will share a key. Only the second record of each pair should be
+      // Each pair of records will share a key. Only the second record of each pair
+      // should be
       // present in the table at the end of the test
       String kafkaKey = key(keyConverter, topic, i / 2);
       String kafkaValue = value(valueConverter, topic, i, false);
@@ -200,10 +201,12 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
 
     // Send records to Kafka
     for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-      // Each pair of records will share a key. Only the second record of each pair should be
+      // Each pair of records will share a key. Only the second record of each pair
+      // should be
       // present in the table at the end of the test
       String kafkaKey = key(keyConverter, topic, i / 2);
-      // Every fourth record will be a tombstone, so every record pair with an odd-numbered key will be dropped
+      // Every fourth record will be a tombstone, so every record pair with an
+      // odd-numbered key will be dropped
       String kafkaValue = value(valueConverter, topic, i, i % 4 == 3);
       logger.debug("Sending message with key '{}' and value '{}' to topic '{}'", kafkaKey, kafkaValue, topic);
       connect.kafka().produce(topic, kafkaKey, kafkaValue);
@@ -212,7 +215,8 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     // wait for tasks to write to BigQuery and commit offsets for their records
     waitForCommittedRecords(CONNECTOR_NAME, topic, NUM_RECORDS_PRODUCED, TASKS_MAX);
 
-    // Since we have multiple rows per key, order by key and the f3 field (which should be
+    // Since we have multiple rows per key, order by key and the f3 field (which
+    // should be
     // monotonically increasing in insertion order)
     List<List<Object>> allRows = readAllRows(bigQuery, table, "k1, f3");
     List<List<Object>> expectedRows = LongStream.range(0, NUM_RECORDS_PRODUCED)
@@ -244,17 +248,20 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     Converter keyConverter = converter(true);
     Converter valueConverter = converter(false);
 
-    // Send records to Kafka. Pre-populate Kafka before starting the connector as we want to measure
+    // Send records to Kafka. Pre-populate Kafka before starting the connector as we
+    // want to measure
     // the connector's throughput cleanly
     logger.info("Pre-populating Kafka with test data");
     for (int i = 0; i < numRecords; i++) {
       if (i % 10000 == 0) {
         logger.info("{} records produced so far", i);
       }
-      // Each pair of records will share a key. Only the second record of each pair should be
+      // Each pair of records will share a key. Only the second record of each pair
+      // should be
       // present in the table at the end of the test
       String kafkaKey = key(keyConverter, topic, i / 2);
-      // Every fourth record will be a tombstone, so every record pair with an odd-numbered key will
+      // Every fourth record will be a tombstone, so every record pair with an
+      // odd-numbered key will
       // be dropped
       String kafkaValue = value(valueConverter, topic, i, i % 4 == 3);
       connect.kafka().produce(topic, kafkaKey, kafkaValue);
@@ -267,17 +274,16 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     props.put(SinkConnectorConfig.TOPICS_CONFIG, topic);
     // Allow for at most 10,000 records per call to poll
     props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX
-            + MAX_POLL_RECORDS_CONFIG,
+        + MAX_POLL_RECORDS_CONFIG,
         "10000");
     // Try to get at least 1 MB per partition with each request
     props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX
-            + ConsumerConfig.FETCH_MIN_BYTES_CONFIG,
+        + ConsumerConfig.FETCH_MIN_BYTES_CONFIG,
         Integer.toString(ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES * numPartitions));
     // Wait up to one second for each batch to reach the requested size
     props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX
-            + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG,
-        "1000"
-    );
+        + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG,
+        "1000");
 
     props.put(BigQuerySinkConfig.SANITIZE_TOPICS_CONFIG, "true");
     props.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, IdentitySchemaRetriever.class.getName());
@@ -301,7 +307,8 @@ public class StorageWriteApiUpsertDeleteIT extends BaseConnectorIT {
     logger.info("All records have been read and committed by the connector; "
         + "total time from start to finish: {} seconds", time / 1000.0);
 
-    // Since we have multiple rows per key, order by key and the f3 field (which should be
+    // Since we have multiple rows per key, order by key and the f3 field (which
+    // should be
     // monotonically increasing in insertion order)
     List<List<Object>> allRows = readAllRows(bigQuery, table, "k1, f3");
     List<List<Object>> expectedRows = LongStream.range(0, numRecords)

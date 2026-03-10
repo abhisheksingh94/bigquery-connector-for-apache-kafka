@@ -29,7 +29,6 @@ import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteSettings;
 import com.google.cloud.bigquery.storage.v1.GetWriteStreamRequest;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
-import com.google.cloud.bigquery.storage.v1.TableFieldSchema;
 import com.google.cloud.bigquery.storage.v1.TableName;
 import com.google.cloud.bigquery.storage.v1.TableSchema;
 import com.google.cloud.bigquery.storage.v1.WriteStream;
@@ -51,20 +50,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * An extension of {@link StorageWriteApiBase} which uses default streams to write data following at least once semantic
+ * An extension of {@link StorageWriteApiBase} which uses default streams to
+ * write data following at least once semantic
  */
 public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
   private static final Logger logger = LoggerFactory.getLogger(StorageWriteApiDefaultStream.class);
   ConcurrentMap<String, JsonStreamWriter> tableToStream = new ConcurrentHashMap<>();
 
   public StorageWriteApiDefaultStream(int retry,
-                                      long retryWait,
-                                      BigQueryWriteSettings writeSettings,
-                                      boolean autoCreateTables,
-                                      ErrantRecordHandler errantRecordHandler,
-                                      SchemaManager schemaManager,
-                                      boolean attemptSchemaUpdate,
-                                      BigQuerySinkConfig config) {
+      long retryWait,
+      BigQueryWriteSettings writeSettings,
+      boolean autoCreateTables,
+      ErrantRecordHandler errantRecordHandler,
+      SchemaManager schemaManager,
+      boolean attemptSchemaUpdate,
+      BigQuerySinkConfig config) {
     super(
         retry,
         retryWait,
@@ -73,32 +73,33 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
         errantRecordHandler,
         schemaManager,
         attemptSchemaUpdate,
-        config
-    );
+        config);
   }
 
   /**
-   * @deprecated This constructor does not support configuration of additional write settings.
-   * Use {@link #StorageWriteApiDefaultStream(int retry, long retryWait, BigQueryWriteSettings writeSettings,
-   * boolean autoCreateTables, ErrantRecordHandler errantRecordHandler, SchemaManager schemaManager,
-   * boolean attemptSchemaUpdate, BigQuerySinkConfig config)} instead.
+   * @deprecated This constructor does not support configuration of additional
+   *             write settings.
+   *             Use
+   *             {@link #StorageWriteApiDefaultStream(int retry, long retryWait, BigQueryWriteSettings writeSettings,
+   *             boolean autoCreateTables, ErrantRecordHandler errantRecordHandler, SchemaManager schemaManager,
+   *             boolean attemptSchemaUpdate, BigQuerySinkConfig config)} instead.
    */
   @Deprecated
   public StorageWriteApiDefaultStream(int retry,
-                                      long retryWait,
-                                      BigQueryWriteSettings writeSettings,
-                                      boolean autoCreateTables,
-                                      ErrantRecordHandler errantRecordHandler,
-                                      SchemaManager schemaManager,
-                                      boolean attemptSchemaUpdate) {
+      long retryWait,
+      BigQueryWriteSettings writeSettings,
+      boolean autoCreateTables,
+      ErrantRecordHandler errantRecordHandler,
+      SchemaManager schemaManager,
+      boolean attemptSchemaUpdate) {
     super(
-            retry,
-            retryWait,
-            writeSettings,
-            autoCreateTables,
-            errantRecordHandler,
-            schemaManager,
-            attemptSchemaUpdate);
+        retry,
+        retryWait,
+        writeSettings,
+        autoCreateTables,
+        errantRecordHandler,
+        schemaManager,
+        attemptSchemaUpdate);
   }
 
   @Override
@@ -109,8 +110,10 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
   }
 
   /**
-   * Either gets called when shutting down the task or when we receive exception that the stream
-   * is actually closed on Google side. This will close and remove the stream from our cache.
+   * Either gets called when shutting down the task or when we receive exception
+   * that the stream
+   * is actually closed on Google side. This will close and remove the stream from
+   * our cache.
    *
    * @param tableName The table name for which stream has to be removed.
    */
@@ -131,39 +134,32 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
    * Open a default stream on table if not already present
    *
    * @param table The table on which stream has to be opened
-   * @param rows  The input rows (would be sent while table creation to identify schema)
+   * @param rows  The input rows (would be sent while table creation to identify
+   *              schema)
    * @return JSONStreamWriter which would be used to write data to bigquery table
    */
   @VisibleForTesting
   JsonStreamWriter getDefaultStream(PartitionedTableId table, List<ConvertedRecord> rows) {
     String tableName = TableNameUtils.tableName(table.getFullTableId()).toString();
     return tableToStream.computeIfAbsent(tableName, t -> {
-      StorageWriteApiRetryHandler retryHandler = new StorageWriteApiRetryHandler(table.getBaseTableId(), getSinkRecords(rows), retry, retryWait, time);
+      StorageWriteApiRetryHandler retryHandler = new StorageWriteApiRetryHandler(table.getBaseTableId(),
+          getSinkRecords(rows), retry, retryWait, time);
       do {
         try {
           if (upsertEnabled) {
             BigQueryWriteClient writeClient = getWriteClient();
 
             // Copied from JsonStreamWriter::newBuilder
-            // TODO: Extract logic into superclass and leverage in StorageWriteApiBatchApplicationStream
-            //       class as well
+            // TODO: Extract logic into superclass and leverage in
+            // StorageWriteApiBatchApplicationStream
+            // class as well
             GetWriteStreamRequest writeStreamRequest = GetWriteStreamRequest.newBuilder()
                 .setName(t + "/_default")
                 .setView(WriteStreamView.FULL)
                 .build();
             WriteStream writeStream = writeClient.getWriteStream(writeStreamRequest);
-            TableSchema.Builder writeSchema = writeStream.hasTableSchema()
-                ? writeStream.getTableSchema().toBuilder()
-                : TableSchema.newBuilder();
-            writeSchema.addFields(
-                    TableFieldSchema.newBuilder()
-                        .setName(CHANGE_TYPE_PSEUDO_COLUMN)
-                        .setType(TableFieldSchema.Type.STRING)
-                        .setMode(TableFieldSchema.Mode.REQUIRED)
-                        .build()
-            );
-
-            return JsonStreamWriter.newBuilder(t, writeSchema.build(), writeClient).build();
+            TableSchema writeSchema = StorageWriteApiBase.addCdcColumns(writeStream.getTableSchema());
+            return JsonStreamWriter.newBuilder(t, writeSchema, writeClient).build();
           } else {
             return jsonWriterFactory.create(tableName);
           }
@@ -194,8 +190,7 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
   protected StreamWriter streamWriter(
       PartitionedTableId table,
       String streamName,
-      List<ConvertedRecord> records
-  ) {
+      List<ConvertedRecord> records) {
     return new DefaultStreamWriter(table, records);
   }
 
@@ -206,7 +201,8 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
     private JsonStreamWriter jsonStreamWriter;
 
     /**
-     * @deprecated Use {@link #DefaultStreamWriter(PartitionedTableId, List)} instead.
+     * @deprecated Use {@link #DefaultStreamWriter(PartitionedTableId, List)}
+     *             instead.
      */
     @Deprecated
     public DefaultStreamWriter(TableName tableName, List<ConvertedRecord> inputRows) {
@@ -220,8 +216,7 @@ public class StorageWriteApiDefaultStream extends StorageWriteApiBase {
 
     @Override
     public ApiFuture<AppendRowsResponse> appendRows(
-        JSONArray rows
-    ) throws Descriptors.DescriptorValidationException, IOException {
+        JSONArray rows) throws Descriptors.DescriptorValidationException, IOException {
       if (jsonStreamWriter == null) {
         jsonStreamWriter = getDefaultStream(table, inputRows);
       }
