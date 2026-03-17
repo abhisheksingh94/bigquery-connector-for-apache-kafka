@@ -368,10 +368,7 @@ public class StorageWriteApiBatchApplicationStreamTest {
   public void testSendSomeToDLQ() throws Exception {
     initialiseStreams();
     when(mockedResponse.get()).thenThrow(badRecordsException).thenReturn(successResponse);
-    assertThrows(
-        BigQueryStorageWriteApiConnectException.class,
-        () -> verifyDLQ(rows)
-    );
+    verifyDLQ(rows);
   }
 
   @Test

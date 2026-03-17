@@ -69,7 +69,7 @@ public class SinkRecordConverter {
   }
 
   public InsertAllRequest.RowToInsert getRecordRow(SinkRecord record, TableId table) {
-    Map<String, Object> convertedRecord = config.isUpsertDeleteEnabled()
+    Map<String, Object> convertedRecord = config.isUpsertDeleteEnabled() && !config.getBoolean(BigQuerySinkTaskConfig.USE_STORAGE_WRITE_API_CONFIG)
         ? getUpsertDeleteRow(record, table)
         : getRegularRow(record);
 

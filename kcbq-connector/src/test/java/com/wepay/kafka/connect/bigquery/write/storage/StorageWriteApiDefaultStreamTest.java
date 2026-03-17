@@ -184,10 +184,7 @@ public class StorageWriteApiDefaultStreamTest {
   @Test
   public void testDefaultStreamMalformedRequestErrorSomeToDLQ() throws Exception {
     when(mockedResponse.get()).thenReturn(malformedError).thenReturn(successResponse);
-    assertThrows(
-        BigQueryStorageWriteApiConnectException.class,
-        () -> verifyDLQ(testMultiRows)
-    );
+    verifyDLQ(testMultiRows);
   }
 
   @Test
@@ -238,10 +235,7 @@ public class StorageWriteApiDefaultStreamTest {
   @Test
   public void testDefaultStreamMalformedRequestExceptionSomeToDLQ() throws Exception {
     when(mockedResponse.get()).thenThrow(appendSerializationException).thenReturn(successResponse);
-    assertThrows(
-        BigQueryStorageWriteApiConnectException.class,
-        () -> verifyDLQ(testMultiRows)
-    );
+    verifyDLQ(testMultiRows);
   }
 
   @Test

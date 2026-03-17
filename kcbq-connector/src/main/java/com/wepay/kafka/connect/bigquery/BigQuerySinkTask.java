@@ -174,7 +174,7 @@ public class BigQuerySinkTask extends SinkTask {
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
-    if (upsertDelete) {
+    if (upsertDelete && !useStorageApi) {
       throw new ConnectException("This connector cannot perform upsert/delete on older versions of "
           + "the Connect framework; please upgrade to version 0.10.2.0 or later");
     } else if (useStorageApi && useStorageApiBatchMode) {
@@ -202,7 +202,7 @@ public class BigQuerySinkTask extends SinkTask {
 
   @Override
   public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
-    if (upsertDelete) {
+    if (upsertDelete && !useStorageApi) {
       Map<TopicPartition, OffsetAndMetadata> result = mergeBatches.latestOffsets();
       checkQueueSize();
       return result;
@@ -256,7 +256,7 @@ public class BigQuerySinkTask extends SinkTask {
           } else {
             TableWriter.Builder simpleTableWriterBuilder = new TableWriter.Builder(bigQueryWriter, table,
                 recordConverter);
-            if (upsertDelete) {
+            if (upsertDelete && !useStorageApi) {
               simpleTableWriterBuilder.onFinish(rows -> mergeBatches.onRowWrites(table.getBaseTableId(), rows));
             }
             tableWriterBuilder = simpleTableWriterBuilder;
@@ -376,7 +376,7 @@ public class BigQuerySinkTask extends SinkTask {
 
   private BigQueryWriter getBigQueryWriter(ErrantRecordHandler errantRecordHandler) {
     BigQuery bigQuery = getBigQuery();
-    if (upsertDelete) {
+    if (upsertDelete && !useStorageApi) {
       return new UpsertDeleteBigQueryWriter(bigQuery,
           getSchemaManager(),
           retry,
@@ -475,7 +475,8 @@ public class BigQuerySinkTask extends SinkTask {
     }
     errantRecordHandler = new ErrantRecordHandler(errantRecordReporter);
 
-    if (upsertDelete) {
+    if (upsertDelete && !useStorageApi) {
+      mergeQueries = null;
       String intermediateTableSuffix = String.format("_%s_%d_%s_%d",
           config.getString(BigQuerySinkConfig.INTERMEDIATE_TABLE_SUFFIX_CONFIG),
           config.getInt(BigQuerySinkTaskConfig.TASK_ID_CONFIG),
@@ -491,7 +492,7 @@ public class BigQuerySinkTask extends SinkTask {
         new LinkedBlockingQueue<>(),
         new MdcContextThreadFactory());
     topicPartitionManager = new TopicPartitionManager();
-    recordTableResolver = new RecordTableResolver(config, mergeBatches, getBigQuery(), upsertDelete,
+    recordTableResolver = new RecordTableResolver(config, mergeBatches, getBigQuery(), upsertDelete && !useStorageApi,
         useStorageApiBatchMode, useStorageApi);
 
     if (config.getBoolean(BigQuerySinkTaskConfig.GCS_BQ_TASK_CONFIG)) {
@@ -623,7 +624,7 @@ public class BigQuerySinkTask extends SinkTask {
     try {
       maybeStopExecutor(loadExecutor, "load executor");
       maybeStopExecutor(executor, "table write executor");
-      if (upsertDelete) {
+      if (upsertDelete && !useStorageApi) {
         mergeBatches.intermediateTables().forEach(table -> {
           logger.debug("Deleting {}", intTable(table));
           getBigQuery().delete(table);
@@ -644,7 +645,7 @@ public class BigQuerySinkTask extends SinkTask {
     }
 
     try {
-      if (upsertDelete) {
+      if (upsertDelete && !useStorageApi) {
         logger.trace("Forcibly shutting down {}", executorName);
         executor.shutdownNow();
       } else {
