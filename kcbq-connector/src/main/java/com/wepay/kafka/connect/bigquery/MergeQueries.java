@@ -44,9 +44,9 @@ import com.wepay.kafka.connect.bigquery.utils.Time;
 import com.wepay.kafka.connect.bigquery.write.batch.KcbqThreadPoolExecutor;
 import com.wepay.kafka.connect.bigquery.write.batch.MergeBatches;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,13 +63,14 @@ public class MergeQueries {
   private static final Logger logger = LoggerFactory.getLogger(MergeQueries.class);
 
   private final String keyFieldName;
+  private final String keySource;
   private final boolean insertPartitionTime;
   private final boolean upsertEnabled;
   private final boolean deleteEnabled;
   private final int bigQueryRetry;
   private final long bigQueryRetryWait;
   private final MergeBatches mergeBatches;
-  private final KcbqThreadPoolExecutor executor;
+  private final ExecutorService executor;
   private final BigQuery bigQuery;
   private final SchemaManager schemaManager;
   private final SinkTaskContext context;
@@ -82,9 +83,8 @@ public class MergeQueries {
                       SchemaManager schemaManager,
                       SinkTaskContext context) {
     this(
-        config.getKafkaKeyFieldName().orElseThrow(() ->
-            new ConnectException("Kafka key field must be configured when upsert/delete is enabled")
-        ),
+        config.getKafkaKeyFieldName().orElse(""),
+        config.getUpsertDeleteKeySource(),
         config.getBoolean(BigQuerySinkConfig.BIGQUERY_PARTITION_DECORATOR_CONFIG),
         config.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG),
         config.getBoolean(BigQuerySinkConfig.DELETE_ENABLED_CONFIG),
@@ -107,17 +107,34 @@ public class MergeQueries {
                int bigQueryRetry,
                long bigQueryRetryWait,
                MergeBatches mergeBatches,
-               KcbqThreadPoolExecutor executor,
+               ExecutorService executor,
                BigQuery bigQuery,
                SchemaManager schemaManager,
                SinkTaskContext context,
                Time time) {
+    this(keyFieldName, BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_KEY, insertPartitionTime, upsertEnabled, deleteEnabled, bigQueryRetry, bigQueryRetryWait, mergeBatches, executor, bigQuery, schemaManager, context, time);
+  }
+
+  public MergeQueries(String keyFieldName,
+                      String keySource,
+                      boolean insertPartitionTime,
+                      boolean upsert,
+                      boolean delete,
+                      int retry,
+                      long retryWait,
+                      MergeBatches mergeBatches,
+                      ExecutorService executor,
+                      BigQuery bigQuery,
+                      SchemaManager schemaManager,
+                      SinkTaskContext context,
+                      Time time) {
     this.keyFieldName = keyFieldName;
+    this.keySource = keySource;
     this.insertPartitionTime = insertPartitionTime;
-    this.upsertEnabled = upsertEnabled;
-    this.deleteEnabled = deleteEnabled;
-    this.bigQueryRetry = bigQueryRetry;
-    this.bigQueryRetryWait = bigQueryRetryWait;
+    this.upsertEnabled = upsert;
+    this.deleteEnabled = delete;
+    this.bigQueryRetry = retry;
+    this.bigQueryRetryWait = retryWait;
     this.mergeBatches = mergeBatches;
     this.executor = executor;
     this.bigQuery = bigQuery;
@@ -129,25 +146,33 @@ public class MergeQueries {
   // DELETE FROM `<dataset>`.`<intermediateTable>` WHERE batchNumber <= <batchNumber> AND _PARTITIONTIME IS NOT NULL;
   @VisibleForTesting
   static String batchClearQuery(TableId intermediateTable, int batchNumber) {
-    return new StringBuilder("DELETE FROM `").append(intermediateTable.getDataset()).append("`.`").append(intermediateTable.getTable()).append("` ")
+    StringBuilder sb = new StringBuilder("DELETE FROM ");
+    if (intermediateTable.getProject() != null && !intermediateTable.getProject().isEmpty()) {
+      sb.append("`").append(intermediateTable.getProject()).append("`.");
+    }
+    sb.append("`").append(intermediateTable.getDataset()).append("`.`").append(intermediateTable.getTable()).append("` ")
         .append("WHERE ")
         .append(INTERMEDIATE_TABLE_BATCH_NUMBER_FIELD).append(" <= ").append(batchNumber).append(" ")
         // Use this clause to filter out rows that are still in the streaming buffer, which should
         // not be subjected to UPDATE or DELETE operations or the query will FAIL
         .append("AND _PARTITIONTIME IS NOT NULL")
-        .append(";")
-        .toString();
+        .append(";");
+    return sb.toString();
   }
 
   private static List<String> listFields(FieldList keyFields, String prefix) {
+    return listFields(keyFields, prefix, true);
+  }
+
+  private static List<String> listFields(FieldList keyFields, String prefix, boolean recurse) {
     return keyFields.stream()
         .flatMap(field -> {
           String fieldName = prefix + field.getName();
           FieldList subFields = field.getSubFields();
-          if (subFields == null) {
+          if (subFields == null || !recurse) {
             return Stream.of(fieldName);
           }
-          return listFields(subFields, fieldName + ".").stream();
+          return listFields(subFields, fieldName + ".", true).stream();
         }).collect(Collectors.toList());
   }
 
@@ -275,17 +300,66 @@ public class MergeQueries {
   private String upsertDeleteMergeFlushQuery(
       TableId intermediateTable, TableId destinationTable, int batchNumber, Schema intermediateSchema
   ) {
-    List<String> keyFields = listFields(
-        intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
-        INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
-    );
-
     List<String> valueColumns = valueColumns(intermediateSchema);
 
     final String key = INTERMEDIATE_TABLE_KEY_FIELD_NAME;
     final String i = INTERMEDIATE_TABLE_ITERATION_FIELD_NAME;
     final String value = INTERMEDIATE_TABLE_VALUE_FIELD_NAME;
     final String batch = INTERMEDIATE_TABLE_BATCH_NUMBER_FIELD;
+
+    String onClause;
+    List<String> keyFields;
+    if (BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_VALUE.equals(keySource)) {
+      // Use PRIMARY KEY NOT ENFORCED columns from the destination table as the MERGE key.
+      // These PK columns are always present in the Kafka record value.
+      // Using ALL value fields would be wrong: when a non-key field changes, the ON clause
+      // would never match the existing row (src.new_value != dst.old_value), breaking upserts.
+      List<String> pkColumns = schemaManager.getPrimaryKeyColumns(destinationTable);
+      FieldList valueSubFields =
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_VALUE_FIELD_NAME).getSubFields();
+
+      if (!pkColumns.isEmpty()) {
+        // GROUP BY the PK columns from the value (e.g. value.f1, value.f2)
+        keyFields = pkColumns.stream()
+            .map(col -> INTERMEDIATE_TABLE_VALUE_FIELD_NAME + "." + col)
+            .collect(Collectors.toList());
+        // ON clause: dst.pk_col = src.value.pk_col  (for each PK column)
+        onClause = pkColumns.stream()
+            .map(col -> DESTINATION_TABLE_ALIAS + ".`" + col + "`=src." + value + "." + col)
+            .collect(Collectors.joining(" AND "));
+      } else {
+        // Fallback (no PK constraint defined): use all value fields — note this means
+        // rows with changed non-key fields won't match, so this behaves like INSERT-only.
+        logger.warn(
+            "No PRIMARY KEY NOT ENFORCED constraint found on destination table {}. "
+                + "Falling back to using all value fields for the MERGE ON clause in "
+                + "record_value key source mode. Upserts will only work if all value fields "
+                + "are part of the key. Define a PRIMARY KEY NOT ENFORCED constraint on the "
+                + "table for correct upsert behaviour.",
+            table(destinationTable)
+        );
+        keyFields = listFields(valueSubFields, INTERMEDIATE_TABLE_VALUE_FIELD_NAME + ".", false);
+        onClause = valueSubFields.stream()
+            .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + value + "." + f.getName())
+            .collect(Collectors.joining(" AND "));
+      }
+    } else {
+      keyFields = listFields(
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
+          INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
+      );
+      if (keyFieldName != null && !keyFieldName.isEmpty()) {
+        onClause = DESTINATION_TABLE_ALIAS + ".`" + keyFieldName + "`=src." + key;
+      } else {
+        List<Field> keyFieldsList = intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields();
+        onClause = keyFieldsList.stream()
+            .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + key + "." + f.getName())
+            .collect(Collectors.joining(" AND "));
+      }
+    }
+
+    String insertColumns = getInsertColumns(intermediateSchema);
+    String insertValues = getInsertValues(intermediateSchema);
 
     return "MERGE " + table(destinationTable) + " " + DESTINATION_TABLE_ALIAS + " "
         + "USING ("
@@ -298,22 +372,14 @@ public class MergeQueries {
         + "GROUP BY " + String.join(", ", keyFields)
         + ")"
         + ") "
-        + "ON " + DESTINATION_TABLE_ALIAS + "." + keyFieldName + "=src." + key + " "
+        + "ON " + onClause + " "
         + "WHEN MATCHED AND src." + value + " IS NOT NULL "
         + "THEN UPDATE SET " + valueColumns.stream().map(col -> DESTINATION_TABLE_ALIAS + ".`" + col + "`=src." + value + "." + col).collect(Collectors.joining(", ")) + " "
         + "WHEN MATCHED AND src." + value + " IS NULL "
         + "THEN DELETE "
         + "WHEN NOT MATCHED AND src." + value + " IS NOT NULL "
-        + "THEN INSERT (`"
-        + keyFieldName + "`, "
-        + partitionTimePseudoColumn()
-        + "`"
-        + String.join("`, `", valueColumns) + "`) "
-        + "VALUES ("
-        + "src." + key + ", "
-        + partitionTimeValue()
-        + valueColumns.stream().map(col -> "src." + value + "." + col).collect(Collectors.joining(", "))
-        + ");";
+        + "THEN INSERT (" + insertColumns + ") "
+        + "VALUES (" + insertValues + ");";
   }
 
   /*
@@ -342,17 +408,41 @@ public class MergeQueries {
   private String upsertMergeFlushQuery(
       TableId intermediateTable, TableId destinationTable, int batchNumber, Schema intermediateSchema
   ) {
-    List<String> keyFields = listFields(
-        intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
-        INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
-    );
-
     List<String> valueColumns = valueColumns(intermediateSchema);
 
     final String key = INTERMEDIATE_TABLE_KEY_FIELD_NAME;
     final String i = INTERMEDIATE_TABLE_ITERATION_FIELD_NAME;
     final String value = INTERMEDIATE_TABLE_VALUE_FIELD_NAME;
     final String batch = INTERMEDIATE_TABLE_BATCH_NUMBER_FIELD;
+
+    String onClause;
+    List<String> keyFields;
+    if (BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_VALUE.equals(keySource)) {
+      keyFields = listFields(
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_VALUE_FIELD_NAME).getSubFields(),
+          INTERMEDIATE_TABLE_VALUE_FIELD_NAME + ".",
+          false
+      );
+      onClause = intermediateSchema.getFields().get(INTERMEDIATE_TABLE_VALUE_FIELD_NAME).getSubFields().stream()
+          .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + value + "." + f.getName())
+          .collect(Collectors.joining(" AND "));
+    } else {
+      keyFields = listFields(
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
+          INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
+      );
+      if (keyFieldName != null && !keyFieldName.isEmpty()) {
+        onClause = DESTINATION_TABLE_ALIAS + ".`" + keyFieldName + "`=src." + key;
+      } else {
+        List<Field> keyFieldsList = intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields();
+        onClause = keyFieldsList.stream()
+            .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + key + "." + f.getName())
+            .collect(Collectors.joining(" AND "));
+      }
+    }
+
+    String insertColumns = getInsertColumns(intermediateSchema);
+    String insertValues = getInsertValues(intermediateSchema);
 
     return "MERGE " + table(destinationTable) + " " + DESTINATION_TABLE_ALIAS + " "
         + "USING ("
@@ -365,20 +455,12 @@ public class MergeQueries {
         + "GROUP BY " + String.join(", ", keyFields)
         + ")"
         + ") "
-        + "ON " + DESTINATION_TABLE_ALIAS + "." + keyFieldName + "=src." + key + " "
+        + "ON " + onClause + " "
         + "WHEN MATCHED "
         + "THEN UPDATE SET " + valueColumns.stream().map(col -> DESTINATION_TABLE_ALIAS + ".`" + col + "`=src." + value + "." + col).collect(Collectors.joining(", ")) + " "
         + "WHEN NOT MATCHED "
-        + "THEN INSERT (`"
-        + keyFieldName + "`, "
-        + partitionTimePseudoColumn()
-        + "`"
-        + String.join("`, `", valueColumns) + "`) "
-        + "VALUES ("
-        + "src." + key + ", "
-        + partitionTimeValue()
-        + valueColumns.stream().map(col -> "src." + value + "." + col).collect(Collectors.joining(", "))
-        + ");";
+        + "THEN INSERT (" + insertColumns + ") "
+        + "VALUES (" + insertValues + ");";
   }
 
   /*
@@ -436,19 +518,41 @@ public class MergeQueries {
   private String deleteMergeFlushQuery(
       TableId intermediateTable, TableId destinationTable, int batchNumber, Schema intermediateSchema
   ) {
-    List<String> keyFields = listFields(
-        intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
-        INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
-    );
-
-    List<String> valueColumns = valueColumns(intermediateSchema);
-
     final String key = INTERMEDIATE_TABLE_KEY_FIELD_NAME;
     final String i = INTERMEDIATE_TABLE_ITERATION_FIELD_NAME;
     final String value = INTERMEDIATE_TABLE_VALUE_FIELD_NAME;
     final String batch = INTERMEDIATE_TABLE_BATCH_NUMBER_FIELD;
 
-    return "MERGE " + table(destinationTable) + " "
+    String onClause;
+    List<String> keyFields;
+    if (BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_VALUE.equals(keySource)) {
+      keyFields = listFields(
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_VALUE_FIELD_NAME).getSubFields(),
+          INTERMEDIATE_TABLE_VALUE_FIELD_NAME + ".",
+          false
+      );
+      onClause = intermediateSchema.getFields().get(INTERMEDIATE_TABLE_VALUE_FIELD_NAME).getSubFields().stream()
+          .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + value + "." + f.getName())
+          .collect(Collectors.joining(" AND "));
+    } else {
+      keyFields = listFields(
+          intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields(),
+          INTERMEDIATE_TABLE_KEY_FIELD_NAME + "."
+      );
+      if (keyFieldName != null && !keyFieldName.isEmpty()) {
+        onClause = DESTINATION_TABLE_ALIAS + ".`" + keyFieldName + "`=src." + key;
+      } else {
+        List<Field> keyFieldsList = intermediateSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields();
+        onClause = keyFieldsList.stream()
+            .map(f -> DESTINATION_TABLE_ALIAS + ".`" + f.getName() + "`=src." + key + "." + f.getName())
+            .collect(Collectors.joining(" AND "));
+      }
+    }
+
+    String insertColumns = getInsertColumns(intermediateSchema);
+    String insertValues = getInsertValues(intermediateSchema);
+
+    return "MERGE " + table(destinationTable) + " " + DESTINATION_TABLE_ALIAS + " "
         + "USING ("
         + "SELECT batch." + key + " AS " + key + ", " + partitionTimeColumn() + value + " "
         + "FROM ("
@@ -469,23 +573,18 @@ public class MergeQueries {
         + "USING (" + key + ") "
         + "WHERE deletes." + i + " IS NULL OR batch." + i + " >= deletes." + i + " "
         + "ORDER BY batch." + i + " ASC) AS src "
-        + "ON `" + destinationTable.getTable() + "`." + keyFieldName + "=src." + key + " AND src." + value + " IS NULL "
+        + "ON " + onClause + " AND src." + value + " IS NULL "
         + "WHEN MATCHED "
         + "THEN DELETE "
         + "WHEN NOT MATCHED AND src." + value + " IS NOT NULL "
-        + "THEN INSERT (`"
-        + keyFieldName + "`, "
-        + partitionTimePseudoColumn()
-        + "`"
-        + String.join("`, `", valueColumns) + "`) "
-        + "VALUES ("
-        + "src." + key + ", "
-        + partitionTimeValue()
-        + valueColumns.stream().map(col -> "src." + value + "." + col).collect(Collectors.joining(", "))
-        + ");";
+        + "THEN INSERT (" + insertColumns + ") "
+        + "VALUES (" + insertValues + ");";
   }
 
   private String table(TableId tableId) {
+    if (tableId.getProject() != null && !tableId.getProject().isEmpty()) {
+      return String.format("`%s`.`%s`.`%s`", tableId.getProject(), tableId.getDataset(), tableId.getTable());
+    }
     return String.format("`%s`.`%s`", tableId.getDataset(), tableId.getTable());
   }
 
@@ -510,5 +609,41 @@ public class MergeQueries {
     return insertPartitionTime
         ? INTERMEDIATE_TABLE_PARTITION_TIME_FIELD_NAME + ", "
         : "";
+  }
+
+  private String getInsertColumns(Schema intermediateTableSchema) {
+    StringBuilder sb = new StringBuilder();
+    if (BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_KEY.equals(keySource)) {
+      if (keyFieldName != null && !keyFieldName.isEmpty()) {
+        sb.append("`").append(keyFieldName).append("`").append(", ");
+      } else {
+        List<Field> keyFieldsList = intermediateTableSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields();
+        for (Field field : keyFieldsList) {
+          sb.append("`").append(field.getName()).append("`").append(", ");
+        }
+      }
+    }
+    sb.append(partitionTimePseudoColumn());
+    List<String> valueFields = valueColumns(intermediateTableSchema);
+    sb.append("`").append(String.join("`, `", valueFields)).append("`");
+    return sb.toString();
+  }
+
+  private String getInsertValues(Schema intermediateTableSchema) {
+    StringBuilder sb = new StringBuilder();
+    if (BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_KEY.equals(keySource)) {
+      if (keyFieldName != null && !keyFieldName.isEmpty()) {
+        sb.append("src.key, ");
+      } else {
+        List<Field> keyFieldsList = intermediateTableSchema.getFields().get(INTERMEDIATE_TABLE_KEY_FIELD_NAME).getSubFields();
+        for (Field field : keyFieldsList) {
+          sb.append("src.key.").append(field.getName()).append(", ");
+        }
+      }
+    }
+    sb.append(partitionTimeValue());
+    List<String> valueFields = valueColumns(intermediateTableSchema);
+    sb.append(valueFields.stream().map(f -> "src.value." + f).collect(Collectors.joining(", ")));
+    return sb.toString();
   }
 }

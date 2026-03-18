@@ -33,7 +33,10 @@ import org.apache.kafka.connect.errors.ConnectException;
 public class TableNameUtils {
 
   public static String table(TableId table) {
-    return String.format("table `%s`.`%s`", table.getDataset(), table.getTable());
+    if (table.getProject() != null && !table.getProject().isEmpty()) {
+      return String.format("`%s`.`%s`.`%s`", table.getProject(), table.getDataset(), table.getTable());
+    }
+    return String.format("`%s`.`%s`", table.getDataset(), table.getTable());
   }
 
   public static TableName tableName(TableId id) {

@@ -56,11 +56,19 @@ public class BigQueryErrorResponses {
 
   public static boolean isNonExistentTableError(BigQueryException exception) {
     String message = message(exception.getError());
-    // If a table does not exist, it will raise a BigQueryException that the input is notFound
-    // Referring to Google Cloud Error Codes Doc: https://cloud.google.com/bigquery/docs/error-messages?hl=en
-    return NOT_FOUND_CODE == exception.getCode()
-        && NOT_FOUND_REASON.equals(exception.getReason())
-        && (message.startsWith("Not found: Table ") || message.contains("Table is deleted: "));
+    boolean isNotFoundCode = NOT_FOUND_CODE == exception.getCode();
+    boolean isNotFoundReason = NOT_FOUND_REASON.equals(exception.getReason());
+    boolean matchesMessage = (message.startsWith("Not found: Table ") || message.contains("Table is deleted: "));
+    
+    if (NOT_FOUND_CODE == exception.getCode()) {
+      System.out.println("DEBUG: isNonExistentTableError check: code=404"
+          + ", reason=" + exception.getReason()
+          + ", message=" + message
+          + ", isNotFoundReason=" + isNotFoundReason
+          + ", matchesMessage=" + matchesMessage);
+    }
+
+    return isNotFoundCode && isNotFoundReason && matchesMessage;
   }
 
   public static boolean isTableMissingSchemaError(BigQueryException exception) {

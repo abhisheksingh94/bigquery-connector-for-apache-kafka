@@ -27,6 +27,7 @@ import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.TableId;
 import com.wepay.kafka.connect.bigquery.MergeQueries;
 import com.wepay.kafka.connect.bigquery.api.KafkaSchemaRecordType;
+import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkTaskConfig;
 import com.wepay.kafka.connect.bigquery.convert.KafkaDataBuilder;
 import com.wepay.kafka.connect.bigquery.convert.RecordConverter;
@@ -97,9 +98,22 @@ public class SinkRecordConverter {
       mergeQueries.mergeFlush(table);
     }
 
-    Map<String, Object> convertedKey = recordConverter.convertRecord(record, KafkaSchemaRecordType.KEY);
-    if (convertedKey == null) {
-      throw new ConnectException("Record keys must be non-null when upsert/delete is enabled");
+    // In record_value mode the MERGE key comes from value fields, not from the Kafka key.
+    // The Kafka key may be a plain string/primitive (not a struct), so attempting a struct
+    // conversion would throw ConversionConnectException.
+    // We still need to populate the intermediate table's "key" column (it exists in the schema),
+    // but its value is unused by the MERGE ON clause in record_value mode. We use a dummy
+    // NULLABLE STRING field in SchemaManager, so we can just pass null here.
+    final boolean isRecordValueKeySource = BigQuerySinkConfig.UPSERT_DELETE_KEY_SOURCE_RECORD_VALUE
+        .equals(config.getUpsertDeleteKeySource());
+    Object convertedKey;
+    if (isRecordValueKeySource) {
+      convertedKey = null; // unused dummy field in record_value mode
+    } else {
+      convertedKey = recordConverter.convertRecord(record, KafkaSchemaRecordType.KEY);
+      if (convertedKey == null) {
+        throw new ConnectException("Record keys must be non-null when upsert/delete is enabled");
+      }
     }
 
     result.put(MergeQueries.INTERMEDIATE_TABLE_KEY_FIELD_NAME, convertedKey);

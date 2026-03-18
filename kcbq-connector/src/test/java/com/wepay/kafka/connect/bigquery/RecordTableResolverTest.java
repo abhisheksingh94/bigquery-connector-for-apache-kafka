@@ -49,7 +49,7 @@ public class RecordTableResolverTest {
     private static final String TOPIC = "topic";
     private static final String DATASET = "dataset";
     private static final String PROJECT = "project";
-    private static final TableId BASE_TABLE_ID = TableId.of("dataset", "topic");
+    private static final TableId BASE_TABLE_ID = TableId.of(PROJECT, DATASET, TOPIC);
     private BigQuerySinkTaskConfig mockConfig;
     private BigQuery mockBigQuery;
     private MergeBatches mockMergeBatches;
@@ -101,7 +101,7 @@ public class RecordTableResolverTest {
         recordTableResolver = new RecordTableResolver(mockConfig, mockMergeBatches, mockBigQuery, false, false, false);
         TableId tableId = recordTableResolver.getRecordTable(mockRecord).getFullTableId();
 
-        assertNull(tableId.getProject());
+        assertEquals(PROJECT, tableId.getProject());
     }
 
     @Test
@@ -119,7 +119,7 @@ public class RecordTableResolverTest {
         when(mockConfig.getBoolean(BigQuerySinkConfig.UPSERT_ENABLED_CONFIG)).thenReturn(true);
 
         String intermediateTable = "intermediate_topic";
-        TableId intermediateTableId = TableId.of(DATASET, intermediateTable);
+        TableId intermediateTableId = TableId.of(PROJECT, DATASET, intermediateTable);
         when(mockMergeBatches.intermediateTableFor(BASE_TABLE_ID)).thenReturn(intermediateTableId);
 
         recordTableResolver = new RecordTableResolver(mockConfig, mockMergeBatches, mockBigQuery, true, false, false);

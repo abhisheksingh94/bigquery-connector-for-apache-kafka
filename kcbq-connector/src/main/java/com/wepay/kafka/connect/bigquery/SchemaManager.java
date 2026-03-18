@@ -249,6 +249,23 @@ public class SchemaManager {
   }
 
   /**
+   * Returns the PRIMARY KEY NOT ENFORCED column names for the given table.
+   * Reads from the in-memory schema cache if available; otherwise fetches directly from BigQuery.
+   * Used by MergeQueries to build the correct ON clause for {@code record_value} key source mode.
+   *
+   * @param table the destination BigQuery table
+   * @return list of primary key column names; empty list if no PK constraint is defined
+   */
+  public List<String> getPrimaryKeyColumns(TableId table) {
+    SchemaAndPrimaryKeyColumns cached = schemaCache.get(table);
+    if (cached != null) {
+      return cached.getPrimaryKeyColumns();
+    }
+    SchemaAndPrimaryKeyColumns read = readTableSchema(table);
+    return read != null ? read.getPrimaryKeyColumns() : Collections.emptyList();
+  }
+
+  /**
    * Create a new table in BigQuery, if it doesn't already exist. Otherwise,
    * update the existing
    * table to use the most-current schema.
@@ -284,9 +301,11 @@ public class SchemaManager {
     synchronized (lock(tableCreateLocks, table)) {
       if (schemaCache.containsKey(table)) {
         // Table already exists; noop
-        logger.debug("Skipping create of {} as it should already exist or appear very soon", table(table));
+        logger.debug("Skipping create of {} as it exists in schema cache (project={}, dataset={}, table={})", 
+            table(table), table.getProject(), table.getDataset(), table.getTable());
         return false;
       }
+      logger.debug("Table {} not in schema cache; checking BigQuery for existence", table(table));
       TableInfo tableInfo = getTableInfo(table, records, true);
       logger.info("Attempting to create {} with schema {}",
           table(table), tableInfo.getDefinition().getSchema());
@@ -726,12 +745,6 @@ public class SchemaManager {
 
   private SchemaAndPrimaryKeyColumns getIntermediateSchema(com.google.cloud.bigquery.Schema valueSchema,
       Schema kafkaKeySchema) {
-    if (kafkaKeySchema == null) {
-      throw new BigQueryConnectException(String.format(
-          "Cannot create intermediate table without specifying a value for '%s'",
-          BigQuerySinkConfig.KAFKA_KEY_FIELD_NAME_CONFIG));
-    }
-
     List<Field> fields = new ArrayList<>();
 
     List<Field> valueFields = new ArrayList<>(valueSchema.getFields());
@@ -752,11 +765,26 @@ public class SchemaManager {
         .build();
     fields.add(wrappedValueField);
 
-    com.google.cloud.bigquery.Schema keySchema = schemaConverter.convertSchema(kafkaKeySchema);
-    Field kafkaKeyField = Field
-        .newBuilder(MergeQueries.INTERMEDIATE_TABLE_KEY_FIELD_NAME, LegacySQLTypeName.RECORD, keySchema.getFields())
-        .setMode(Field.Mode.REQUIRED)
-        .build();
+    final Field kafkaKeyField;
+    if (kafkaKeySchema == null) {
+      // record_value key source mode: kafkaKeyFieldName is not configured.
+      // The MERGE ON clause uses src.value.* (PK columns), not src.key, so the key field
+      // in the intermediate table is never read by the merge query.
+      // Use a NULLABLE STRING dummy to satisfy BigQuery schema requirements while keeping
+      // the intermediate table schema consistent with other modes.
+      // (BigQuery RECORD types must have ≥1 sub-field, so we cannot use an empty RECORD.)
+      kafkaKeyField = Field
+          .newBuilder(MergeQueries.INTERMEDIATE_TABLE_KEY_FIELD_NAME, LegacySQLTypeName.STRING)
+          .setMode(Field.Mode.NULLABLE)
+          .build();
+    } else {
+      com.google.cloud.bigquery.Schema keySchema = schemaConverter.convertSchema(kafkaKeySchema);
+      kafkaKeyField = Field
+          .newBuilder(MergeQueries.INTERMEDIATE_TABLE_KEY_FIELD_NAME, LegacySQLTypeName.RECORD,
+              keySchema.getFields())
+          .setMode(Field.Mode.REQUIRED)
+          .build();
+    }
     fields.add(kafkaKeyField);
 
     Field iterationField = Field

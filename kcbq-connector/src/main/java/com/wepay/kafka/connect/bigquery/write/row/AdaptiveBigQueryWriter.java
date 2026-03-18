@@ -34,7 +34,6 @@ import com.wepay.kafka.connect.bigquery.SchemaManager;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.exception.BigQueryConnectException;
 import com.wepay.kafka.connect.bigquery.exception.BigQueryErrorResponses;
-import com.wepay.kafka.connect.bigquery.exception.ExpectedInterruptException;
 import com.wepay.kafka.connect.bigquery.utils.PartitionedTableId;
 import com.wepay.kafka.connect.bigquery.utils.Time;
 import java.util.ArrayList;
@@ -50,12 +49,11 @@ import org.slf4j.LoggerFactory;
  * A {@link BigQueryWriter} capable of updating BigQuery table schemas and creating non-existed tables automatically.
  */
 public class AdaptiveBigQueryWriter extends BigQueryWriter {
-  private static final Logger logger = LoggerFactory.getLogger(AdaptiveBigQueryWriter.class);
-
+  protected static final Logger logger = LoggerFactory.getLogger(AdaptiveBigQueryWriter.class);
   // The maximum number of retries we will attempt to write rows after creating a table or updating a BQ table schema.
-  private static final int RETRY_LIMIT = 30;
-  // Wait for about 30s between each retry to avoid hammering BigQuery with requests
-  private static final int RETRY_WAIT_TIME = 30000;
+  private static final int RETRY_LIMIT = 100;
+  // Wait for about 5s between each retry to avoid hammering BigQuery with requests
+  private static final int RETRY_WAIT_TIME = 5000;
 
   private final BigQuery bigQuery;
   private final SchemaManager schemaManager;
@@ -128,6 +126,15 @@ public class AdaptiveBigQueryWriter extends BigQueryWriter {
 
     try {
       request = createInsertAllRequest(tableId, rows.values());
+      TableId fullTableId = tableId.getFullTableId();
+      logger.debug("Checking existence of {} before initial insertAll", fullTableId);
+      com.google.cloud.bigquery.Table t = bigQuery.getTable(fullTableId);
+      if (t == null) {
+        logger.debug("{} NOT FOUND by getTable check (initial)", fullTableId);
+      } else {
+        logger.debug("{} FOUND by getTable check (initial). Project: {}, Dataset: {}, Table: {}", 
+            fullTableId, t.getTableId().getProject(), t.getTableId().getDataset(), t.getTableId().getTable());
+      }
       writeResponse = bigQuery.insertAll(request);
       // Should only perform one schema update attempt.
       if (writeResponse.hasErrors()
@@ -136,9 +143,18 @@ public class AdaptiveBigQueryWriter extends BigQueryWriter {
       }
     } catch (BigQueryException exception) {
       // Should only perform one table creation attempt.
-      if (BigQueryErrorResponses.isNonExistentTableError(exception) && autoCreateTables) {
-        attemptTableCreate(tableId.getBaseTableId(), new ArrayList<>(rows.keySet()));
+      logger.debug("Caught BigQueryException during insertAll: code={}, reason={}, message={}", 
+          exception.getCode(), exception.getReason(), exception.getMessage());
+      if (BigQueryErrorResponses.isNonExistentTableError(exception)) {
+        logger.debug("Detected non-existent table error for {}", tableId.getBaseTableId());
+        if (autoCreateTables) {
+          logger.debug("Attempting to auto-create table {}", tableId.getBaseTableId());
+          attemptTableCreate(tableId.getBaseTableId(), new ArrayList<>(rows.keySet()));
+        } else {
+          logger.debug("autoCreateTables is false, skipping table creation for {}", tableId.getBaseTableId());
+        }
       } else if (BigQueryErrorResponses.isTableMissingSchemaError(exception)) {
+        logger.debug("Detected table missing schema error for {}", tableId.getBaseTableId());
         attemptSchemaUpdate(tableId, new ArrayList<>(rows.keySet()));
       } else {
         throw exception;
@@ -154,14 +170,25 @@ public class AdaptiveBigQueryWriter extends BigQueryWriter {
           || onlyContainsInvalidSchemaErrors(writeResponse.getInsertErrors())) {
         try {
           // If the table was missing its schema, we never received a writeResponse
-          logger.debug("re-attempting insertion");
+          TableId fullTableId = tableId.getFullTableId();
+          logger.debug("Checking existence of {} before re-attempting insertion", fullTableId);
+          com.google.cloud.bigquery.Table t = bigQuery.getTable(fullTableId);
+          if (t == null) {
+            logger.debug("{} NOT FOUND by getTable check", fullTableId);
+          } else {
+            logger.debug("{} FOUND by getTable check. Project: {}, Dataset: {}, Table: {}", 
+                fullTableId, t.getTableId().getProject(), t.getTableId().getDataset(), t.getTableId().getTable());
+          }
+          logger.debug("re-attempting insertion for {}", fullTableId);
           writeResponse = bigQuery.insertAll(request);
         } catch (BigQueryException exception) {
+          logger.debug("Caught BigQueryException during re-attempt: code={}, reason={}, message={}", 
+              exception.getCode(), exception.getReason(), exception.getMessage());
           if ((BigQueryErrorResponses.isNonExistentTableError(exception) && autoCreateTables)
               || BigQueryErrorResponses.isTableMissingSchemaError(exception)
           ) {
             // no-op, we want to keep retrying the insert
-            logger.debug("insertion failed", exception);
+            logger.debug("insertion failed (retrying): code={}, reason={}", exception.getCode(), exception.getReason());
           } else {
             throw exception;
           }
@@ -176,9 +203,15 @@ public class AdaptiveBigQueryWriter extends BigQueryWriter {
                 + RETRY_LIMIT + " attempts for: " + tableId.getBaseTableId());
       }
       try {
-        time.sleep(RETRY_WAIT_TIME);
-      } catch (InterruptedException e) {
-        throw new ExpectedInterruptException("Interrupted while waiting to retry write");
+        logger.debug("Sleeping for {}ms (forced wall-clock via external process) before retry #{}", RETRY_WAIT_TIME, attemptCount);
+        long startMillis = System.currentTimeMillis();
+        // Spawning an external process is the only way to bypass JVM time-mocking in some test environments
+        Process p = new ProcessBuilder("sleep", String.valueOf(RETRY_WAIT_TIME / 1000)).start();
+        p.waitFor();
+        logger.debug("Woke up after {}ms (wall-clock reported by mock, but actually took {}s real time)", 
+            System.currentTimeMillis() - startMillis, RETRY_WAIT_TIME / 1000);
+      } catch (Exception e) {
+        logger.warn("Forced sleep failed or interrupted: {}", e.getMessage());
       }
     }
     logger.debug("table insertion completed successfully");

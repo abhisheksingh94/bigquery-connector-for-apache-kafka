@@ -129,13 +129,16 @@ public class UpsertDeleteBigQueryWriter extends AdaptiveBigQueryWriter {
 
   @Override
   protected void attemptTableCreate(TableId tableId, List<SinkRecord> records) {
+    logger.debug("UpsertDeleteBigQueryWriter.attemptTableCreate called for {}", tableId);
     // Create the intermediate table here...
     super.attemptTableCreate(tableId, records);
     if (autoCreateTables) {
       try {
         // ... and create or update the destination table here, if it doesn't already exist and auto
         // table creation is enabled
-        schemaManager.createOrUpdateTable(intermediateToDestinationTables.get(tableId), records);
+        TableId destinationTable = intermediateToDestinationTables.get(tableId);
+        logger.debug("Propagating table creation to destination table {}", destinationTable);
+        schemaManager.createOrUpdateTable(destinationTable, records);
       } catch (BigQueryException exception) {
         throw new BigQueryConnectException(
             "Failed to create table " + tableId, exception);

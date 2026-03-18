@@ -54,7 +54,6 @@ class RecordTableResolver {
   private final boolean usePartitionDecorator;
   private final boolean upsertDelete;
   private final boolean useMessageTimeDatePartitioning;
-  private final boolean forceProjectFromConfig;
 
   public RecordTableResolver(BigQuerySinkTaskConfig config, MergeBatches mergeBatches, BigQuery bigQuery,
                              boolean upsertDelete, boolean useStorageApiBatchMode, boolean useStorageApi) {
@@ -65,7 +64,6 @@ class RecordTableResolver {
     this.upsertDelete = upsertDelete;
     this.useMessageTimeDatePartitioning = config.getBoolean(BigQuerySinkConfig.BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG);
     this.usePartitionDecorator = !useStorageApiBatchMode && config.getBoolean(BigQuerySinkConfig.BIGQUERY_PARTITION_DECORATOR_CONFIG);
-    this.forceProjectFromConfig = config.getBoolean(BigQuerySinkConfig.USE_CREDENTIALS_PROJECT_ID_CONFIG) || useStorageApi;
   }
 
   public PartitionedTableId getRecordTable(SinkRecord record) {
@@ -95,8 +93,8 @@ class RecordTableResolver {
       String[] datasetAndTable = TableNameUtils.getDataSetAndTableName(config, topic);
       TableId baseTableId;
 
-      if (forceProjectFromConfig) {
-        String project = config.getString(BigQuerySinkConfig.PROJECT_CONFIG);
+      String project = config.getString(BigQuerySinkConfig.PROJECT_CONFIG);
+      if (project != null && !project.isEmpty()) {
         baseTableId = TableId.of(project, datasetAndTable[0], datasetAndTable[1]);
       } else {
         baseTableId = TableId.of(datasetAndTable[0], datasetAndTable[1]);

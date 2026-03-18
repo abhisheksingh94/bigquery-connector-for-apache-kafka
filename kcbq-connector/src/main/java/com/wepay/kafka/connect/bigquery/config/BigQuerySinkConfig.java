@@ -167,6 +167,13 @@ public class BigQuerySinkConfig extends AbstractConfig {
   public static final Boolean BIGQUERY_PARTITION_DECORATOR_DEFAULT = true;
   public static final String BIGQUERY_TIMESTAMP_PARTITION_FIELD_NAME_CONFIG = "timestampPartitionFieldName";
   public static final String BIGQUERY_CLUSTERING_FIELD_NAMES_CONFIG = "clusteringPartitionFieldNames";
+  public static final String UPSERT_DELETE_KEY_SOURCE_CONFIG = "upsertDeleteKeySource";
+  public static final String UPSERT_DELETE_KEY_SOURCE_DEFAULT = "record_key";
+  public static final String UPSERT_DELETE_KEY_SOURCE_DOC = "The source of the primary key for upsert/delete operations. "
+      + "Can be 'record_key' to use the Kafka record key, or 'record_value' to use all fields in the record value. "
+      + "Only used when storageWriteAPI is disabled.";
+  public static final String UPSERT_DELETE_KEY_SOURCE_RECORD_KEY = "record_key";
+  public static final String UPSERT_DELETE_KEY_SOURCE_RECORD_VALUE = "record_value";
 
   public static final String PRESERVE_KAFKA_TOPIC_PARTITION_OFFSET__CONFIG = "preserveKafkaTopicPartitionOffset";
   public static final ConfigDef.Type PRESERVE_KAFKA_TOPIC_PARTITION_OFFSET__TYPE = ConfigDef.Type.BOOLEAN;
@@ -907,6 +914,13 @@ public class BigQuerySinkConfig extends AbstractConfig {
                     BIGQUERY_CLUSTERING_FIELD_NAMES_IMPORTANCE,
                     BIGQUERY_CLUSTERING_FIELD_NAMES_DOC
             ).define(
+                    UPSERT_DELETE_KEY_SOURCE_CONFIG,
+                    ConfigDef.Type.STRING,
+                    UPSERT_DELETE_KEY_SOURCE_DEFAULT,
+                    ConfigDef.ValidString.in("record_key", "record_value"),
+                    ConfigDef.Importance.MEDIUM,
+                    UPSERT_DELETE_KEY_SOURCE_DOC
+            ).define(
                     new ConfigKeyBuilder<>(TIME_PARTITIONING_TYPE_CONFIG)
                             .type(TIME_PARTITIONING_TYPE_TYPE)
                             .defaultValue(TIME_PARTITIONING_TYPE_DEFAULT)
@@ -1226,6 +1240,10 @@ public class BigQuerySinkConfig extends AbstractConfig {
 
   public boolean isDeleteEnabled() {
     return getBoolean(DELETE_ENABLED_CONFIG);
+  }
+
+  public String getUpsertDeleteKeySource() {
+    return getString(UPSERT_DELETE_KEY_SOURCE_CONFIG);
   }
 
   public Optional<TimePartitioning.Type> getTimePartitioningType() {

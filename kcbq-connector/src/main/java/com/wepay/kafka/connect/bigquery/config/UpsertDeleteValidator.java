@@ -80,13 +80,7 @@ public abstract class UpsertDeleteValidator extends MultiPropertyValidator<BigQu
         );
       }
 
-      if (!config.getKafkaKeyFieldName().isPresent()) {
-        return Optional.of(String.format(
-            "%s must be specified when %s is set to true",
-            KAFKA_KEY_FIELD_NAME_CONFIG,
-            propertyName()
-        ));
-      }
+      // kafkaKeyFieldName is optional; if not provided, it will be inferred from the Kafka record key
     } else {
       for (String property : Arrays.asList(MERGE_INTERVAL_MS_CONFIG, MERGE_RECORDS_THRESHOLD_CONFIG)) {
         if (config.originals().containsKey(MERGE_INTERVAL_MS_CONFIG)) {
